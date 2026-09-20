@@ -18,9 +18,23 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY?.trim();
 const ARC_MAINNET_RPC_URL = process.env.ARC_MAINNET_RPC_URL?.trim() ?? "";
 const ARC_MAINNET_CHAIN_ID = process.env.ARC_MAINNET_CHAIN_ID?.trim();
 
-const accounts = PRIVATE_KEY
-  ? [PRIVATE_KEY.startsWith("0x") ? PRIVATE_KEY : `0x${PRIVATE_KEY}`]
-  : [];
+// Only accept a well-formed 32-byte key. A placeholder or truncated value in
+// .env would otherwise fail config validation and break every command,
+// including local compiles and tests that need no account at all.
+const normalisedKey = PRIVATE_KEY?.startsWith("0x")
+  ? PRIVATE_KEY.slice(2)
+  : PRIVATE_KEY;
+
+const keyIsValid = /^[0-9a-fA-F]{64}$/.test(normalisedKey ?? "");
+
+if (PRIVATE_KEY && !keyIsValid) {
+  console.warn(
+    `warning: PRIVATE_KEY in .env is not a 32-byte hex key (${normalisedKey?.length ?? 0} hex chars). ` +
+      `Ignoring it — local commands still work, but anything needing an account will not.`,
+  );
+}
+
+const accounts: string[] = keyIsValid ? [`0x${normalisedKey}`] : [];
 
 // arcMainnet is only registered once both env vars are present, so that no
 // mainnet chain id or RPC URL is ever baked into this repo. Without them,
