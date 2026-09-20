@@ -25,7 +25,7 @@ const accounts = PRIVATE_KEY
 // arcMainnet is only registered once both env vars are present, so that no
 // mainnet chain id or RPC URL is ever baked into this repo. Without them,
 // `--network arcMainnet` fails fast instead of silently using a default.
-const arcMainnet =
+const arcMainnet: NonNullable<HardhatUserConfig["networks"]> =
   ARC_MAINNET_RPC_URL && ARC_MAINNET_CHAIN_ID
     ? {
         arcMainnet: {
