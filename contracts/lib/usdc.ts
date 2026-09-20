@@ -5,6 +5,11 @@
  * Every balance and amount in this project goes through this interface. The
  * 18-decimal native balance is never read or written anywhere.
  */
+// Arc native gas is 18 decimals; the USDC ERC-20 predeploy is 6.
+// Some provider docs (e.g. GetBlock) claim native is 6 — that is wrong.
+// Verified on mainnet: eth_gasPrice measured at ~20 gwei (floating,
+// base + tip), which is only sensible at 18. Never read the native
+// balance anywhere in this project.
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000" as const;
 
 export const USDC_DECIMALS = 6 as const;
