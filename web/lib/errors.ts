@@ -35,15 +35,22 @@ export type TxFailure = {
 
 /**
  * Arc's USDC is Circle's NativeFiatTokenV2_2 behind FiatTokenProxy. Its
- * transferFrom is guarded by `whenNotPaused` and `notBlacklisted(msg.sender)`,
- * and V2_2 also rejects blacklisted from/to accounts. Those are protocol-level
- * compliance refusals: they fire regardless of balance or allowance, and must
- * not be reported as an ordinary failure.
+ * transferFrom is guarded by `whenNotPaused` and `notBlacklisted(msg.sender)`
+ * — the spender, which for us is the Rota contract. from/to compliance is not
+ * a modifier here: _transfer hands the movement to the native coin authority,
+ * and a refusal there surfaces as "Native transfer failed".
+ *
+ * All of these are protocol-level refusals: they fire regardless of balance or
+ * allowance, and must not be reported as an ordinary failure.
  */
 const COMPLIANCE_REVERTS = [
   "Blacklistable: account is blacklisted",
   "FiatTokenV2_2: Account is blacklisted",
   "Pausable: paused",
+  // NativeFiatTokenV2_2._transfer delegates the actual movement to the chain's
+  // native coin authority. When that refuses — which is where from/to
+  // compliance is enforced — this is the string that comes back.
+  "Native transfer failed",
 ];
 
 /**

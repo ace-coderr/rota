@@ -79,3 +79,30 @@ export const ERC20_ABI = [
     outputs: [{ name: "", type: "bool" }],
   },
 ] as const;
+
+/**
+ * Arc-specific surface of the USDC predeploy. It is Circle's
+ * NativeFiatTokenV2_2, which exposes the protocol blocklist as a plain view:
+ * isBlacklisted delegates to the chain's native coin control.
+ *
+ * transferFrom is guarded by `notBlacklisted(msg.sender)` — msg.sender being
+ * the *spender*, i.e. the Rota contract. A blocked spender fails every
+ * transfer in the circle. from/to are not guarded by that modifier here; the
+ * native coin authority enforces those at protocol level instead.
+ */
+export const USDC_ARC_ABI = [
+  {
+    type: "function",
+    name: "isBlacklisted",
+    stateMutability: "view",
+    inputs: [{ name: "_account", type: "address" }],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;

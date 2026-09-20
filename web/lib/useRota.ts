@@ -3,7 +3,7 @@
 import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import type { Address } from "viem";
 
-import { ERC20_ABI, USDC_ADDRESS } from "./usdc";
+import { ERC20_ABI, USDC_ADDRESS, USDC_ARC_ABI } from "./usdc";
 import { ROTA_ABI, ROTA_ADDRESS } from "./rota";
 
 export type MemberStatus = {
@@ -92,6 +92,45 @@ export function useCircle(circleId: bigint | undefined) {
 
   const [raw, members, preview, decimals] = query.data ?? [];
 
+  const memberList = members as Address[] | undefined;
+
+  /**
+   * Protocol-level blocklist state, read straight from the predeploy.
+   *
+   * Rota is the `spender` on every transferFrom, so if Rota itself is blocked
+   * no cycle can settle at all. Members are checked too: the token delegates
+   * from/to compliance to the native coin authority, which surfaces as a
+   * failed transfer rather than a named error, so knowing up front is the only
+   * way to explain it before anyone signs.
+   */
+  const blocklist = useReadContracts({
+    allowFailure: false,
+    contracts: [
+      ...(memberList ?? []).map((member) => ({
+        address: USDC_ADDRESS,
+        abi: USDC_ARC_ABI,
+        functionName: "isBlacklisted" as const,
+        args: [member] as const,
+      })),
+      {
+        address: USDC_ADDRESS,
+        abi: USDC_ARC_ABI,
+        functionName: "isBlacklisted" as const,
+        args: [ROTA_ADDRESS!] as const,
+      },
+    ],
+    query: { enabled: Boolean(memberList?.length && ROTA_ADDRESS) },
+  });
+
+  const blocklistFlags = blocklist.data as boolean[] | undefined;
+  const rotaBlocked = blocklistFlags
+    ? blocklistFlags[blocklistFlags.length - 1]
+    : undefined;
+  const blockedMembers: Address[] =
+    blocklistFlags && memberList
+      ? memberList.filter((_, index) => blocklistFlags[index])
+      : [];
+
   const circle: CircleState | undefined = raw
     ? {
         contribution: raw[0],
@@ -105,12 +144,19 @@ export function useCircle(circleId: bigint | undefined) {
 
   /** Re-reads every value this page shows. Call after a tx confirms. */
   const refetchAll = async () => {
-    await Promise.all([query.refetch(), allowance.refetch(), balance.refetch()]);
+    await Promise.all([
+      query.refetch(),
+      allowance.refetch(),
+      balance.refetch(),
+      blocklist.refetch(),
+    ]);
   };
 
   return {
     circle,
-    members: members as Address[] | undefined,
+    members: memberList,
+    blockedMembers,
+    rotaBlocked,
     preview: preview as readonly MemberStatus[] | undefined,
     decimals: decimals as number | undefined,
     myAllowance: allowance.data as bigint | undefined,

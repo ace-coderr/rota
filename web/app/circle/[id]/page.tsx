@@ -34,6 +34,8 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const {
     circle,
     members,
+    blockedMembers,
+    rotaBlocked,
     preview,
     decimals,
     myAllowance,
@@ -124,8 +126,16 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const allowanceShort =
     myAllowance !== undefined && myAllowance < requiredAllowance;
 
+  // Short = has not approved enough, or does not hold enough. Blocked = the
+  // protocol refuses to move their USDC at all. They are different problems
+  // with different remedies, so they are never merged into one message.
   const shortMembers = (preview ?? []).filter((status) => !status.ready);
-  const everyoneReady = preview !== undefined && shortMembers.length === 0;
+  const anyBlocked = blockedMembers.length > 0 || rotaBlocked === true;
+  const everyoneReady =
+    preview !== undefined && shortMembers.length === 0 && !anyBlocked;
+
+  const isBlocked = (member: string) =>
+    blockedMembers.some((blocked) => sameAddress(blocked, member));
 
   const due = Boolean(
     circle?.started && chainNow !== undefined && chainNow >= circle.nextDueAt,
@@ -245,6 +255,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                 <th>Member</th>
                 <th>Allowance</th>
                 <th>Balance</th>
+                <th>Blocked</th>
                 <th>Ready</th>
               </tr>
             </thead>
@@ -256,11 +267,59 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                   </td>
                   <td>{formatUsdc(status.allowance, decimals)}</td>
                   <td>{formatUsdc(status.balance, decimals)}</td>
+                  <td>{isBlocked(status.member) ? "BLOCKED" : "no"}</td>
                   <td>{status.ready ? "yes" : "NO"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {rotaBlocked === true && (
+            <div role="alert" data-kind="compliance">
+              <p>
+                <strong>
+                  The Rota contract itself is blocklisted by USDC. No cycle in
+                  any circle can settle.
+                </strong>
+              </p>
+              <p>
+                Rota is the spender on every transfer, and{" "}
+                <code>transferFrom</code> refuses a blocklisted spender. This is
+                not something any member can fix by approving or topping up.
+              </p>
+              <p>
+                <small>
+                  contract: <code>{ROTA_ADDRESS}</code>
+                </small>
+              </p>
+            </div>
+          )}
+
+          {blockedMembers.length > 0 && (
+            <div role="alert" data-kind="compliance">
+              <p>
+                <strong>
+                  {blockedMembers.length} member(s) are blocklisted by USDC.
+                  Disburse is disabled.
+                </strong>
+              </p>
+              <p>
+                This is a compliance block, not a balance or allowance problem —
+                approving more or topping up will not clear it. The circle cannot
+                settle while they are members.
+              </p>
+              <ul>
+                {blockedMembers.map((member) => (
+                  <li key={member}>
+                    <a href={addressUrl(member)} target="_blank" rel="noreferrer">
+                      <code>{member}</code>
+                    </a>{" "}
+                    — blocklisted
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {shortMembers.length > 0 && (
             <div role="alert">
