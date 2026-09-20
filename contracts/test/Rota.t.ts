@@ -276,7 +276,7 @@ describe("Rota", () => {
 
     await expectRevert(
       ctx.rota.write.disburse([ctx.circleId], { account: outsider.account }),
-      "ERC20InsufficientAllowance",
+      "ERC20: transfer amount exceeds allowance",
     );
 
     assert.deepEqual(await allBalances(ctx), before, "balances moved on a failed disburse");
@@ -306,7 +306,7 @@ describe("Rota", () => {
 
     await expectRevert(
       ctx.rota.write.disburse([ctx.circleId], { account: outsider.account }),
-      "ERC20InsufficientBalance",
+      "ERC20: transfer amount exceeds balance",
     );
 
     assert.deepEqual(await allBalances(ctx), before, "balances moved on a failed disburse");
@@ -539,6 +539,93 @@ describe("Rota", () => {
       ctx.rota.write.disburse([ctx.circleId], { account: outsider.account }),
       "CircleComplete",
     );
+  });
+
+  // ------------------------------------------------------------------
+  // Arc's USDC can refuse a transfer on compliance grounds regardless of
+  // balance and allowance. MockUSDC mirrors NativeFiatTokenV2_2's guards, so
+  // these exercise the same reverts the frontend classifies.
+  // ------------------------------------------------------------------
+  describe("compliance refusals", () => {
+    it("reverts when Rota itself is blocklisted, and no balance moves", async () => {
+      const ctx = await setup();
+      await startCircle(ctx);
+
+      // Rota is the spender on every transferFrom, and V2_2 guards the
+      // spender. Blocking it freezes the whole circle.
+      await ctx.token.write.blacklist([ctx.rota.address]);
+
+      const before = await allBalances(ctx);
+      await time.increase(Number(PERIOD));
+
+      await expectRevert(
+        ctx.rota.write.disburse([ctx.circleId], { account: outsider.account }),
+        "Blacklistable: account is blacklisted",
+      );
+
+      assert.deepEqual(await allBalances(ctx), before);
+      assert.equal(await rotaBalance(ctx), 0n);
+    });
+
+    it("reverts when the token is paused, and no balance moves", async () => {
+      const ctx = await setup();
+      await startCircle(ctx);
+
+      await ctx.token.write.pause();
+
+      const before = await allBalances(ctx);
+      await time.increase(Number(PERIOD));
+
+      await expectRevert(
+        ctx.rota.write.disburse([ctx.circleId], { account: outsider.account }),
+        "Pausable: paused",
+      );
+
+      assert.deepEqual(await allBalances(ctx), before);
+    });
+
+    it("reverts when the native coin authority refuses a member, and no balance moves", async () => {
+      const ctx = await setup();
+      await startCircle(ctx);
+
+      // from/to compliance is not a modifier on V2_2: _transfer delegates to
+      // the native coin authority, which comes back as "Native transfer
+      // failed". The member here is fully funded and fully approved.
+      await ctx.token.write.setAuthorityBlocked([
+        memberAddresses[4],
+        true,
+      ]);
+
+      const before = await allBalances(ctx);
+      assert.ok(before[4] >= CONTRIBUTION, "the blocked member is not short");
+
+      await time.increase(Number(PERIOD));
+
+      await expectRevert(
+        ctx.rota.write.disburse([ctx.circleId], { account: outsider.account }),
+        "Native transfer failed",
+      );
+
+      assert.deepEqual(await allBalances(ctx), before);
+      assert.equal(await rotaBalance(ctx), 0n);
+    });
+
+    it("previewRound still reports a blocked member as ready, which is why the UI checks isBlacklisted", async () => {
+      const ctx = await setup();
+      await startCircle(ctx);
+      await ctx.token.write.setAuthorityBlocked([memberAddresses[4], true]);
+
+      type Status = { member: `0x${string}`; allowance: bigint; balance: bigint; ready: boolean };
+      const statuses = (await ctx.rota.read.previewRound([
+        ctx.circleId,
+      ])) as Status[];
+
+      // Allowance and balance are both fine, so previewRound says ready. It
+      // reads allowance and balance only — it cannot see compliance state.
+      // The frontend calls isBlacklisted separately for exactly this reason.
+      assert.equal(statuses[4].ready, true);
+      assert.ok(statuses[4].balance >= CONTRIBUTION);
+    });
   });
 
   describe("createCircle validation", () => {
