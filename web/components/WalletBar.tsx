@@ -3,7 +3,7 @@
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 
 import { shortAddress } from "@/lib/format";
-import { EXPECTED_CHAIN_ID } from "@/lib/wagmi";
+import { DEFAULT_DEPLOYMENT, deploymentFor } from "@/lib/deployments";
 
 /**
  * Connecting is plumbing, not the point of any screen, so it stays quiet
@@ -15,7 +15,11 @@ export function WalletBar({ reason }: { reason?: string }) {
   const { disconnect } = useDisconnect();
   const { switchChain, isPending: isSwitching } = useSwitchChain();
 
-  const wrongNetwork = isConnected && chainId !== EXPECTED_CHAIN_ID;
+  // Wrong network means "no Rota deployed on the chain you are on", not
+  // "not the one chain we know about" — there are two now.
+  const active = deploymentFor(chainId);
+  const wrongNetwork = isConnected && !active;
+  const target = DEFAULT_DEPLOYMENT;
 
   if (!isConnected) {
     return (
@@ -49,14 +53,16 @@ export function WalletBar({ reason }: { reason?: string }) {
       {wrongNetwork && (
         <div className="notice notice-wait">
           <p className="notice-title">Your wallet is on the wrong network.</p>
-          <p>Switch it to Arc to carry on.</p>
+          <p>Switch it to {target?.label ?? "Arc"} to carry on.</p>
           <button
             type="button"
             className="btn"
-            disabled={isSwitching}
-            onClick={() => switchChain({ chainId: EXPECTED_CHAIN_ID })}
+            disabled={isSwitching || !target}
+            onClick={() =>
+              target && switchChain({ chainId: target.chain.id })
+            }
           >
-            {isSwitching ? "Switching…" : "Switch to Arc"}
+            {isSwitching ? "Switching…" : `Switch to ${target?.label ?? "Arc"}`}
           </button>
         </div>
       )}

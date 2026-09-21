@@ -1,12 +1,8 @@
-import { arcTestnet } from "./chains";
+/**
+ * Explorer links are per-chain: testnet and mainnet have different explorers,
+ * so the base URL comes from the active deployment rather than a constant.
+ */
+export const addressUrl = (base: string, address: string) =>
+  `${base}/address/${address}`;
 
-const BASE = arcTestnet.blockExplorers.default.url;
-
-export const addressUrl = (address: string) => `${BASE}/address/${address}`;
-export const txUrl = (hash: string) => `${BASE}/tx/${hash}`;
-
-/** 0x1234…abcd */
-export function short(value: string, lead = 6, tail = 4) {
-  if (value.length <= lead + tail + 1) return value;
-  return `${value.slice(0, lead)}…${value.slice(-tail)}`;
-}
+export const txUrl = (base: string, hash: string) => `${base}/tx/${hash}`;

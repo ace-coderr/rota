@@ -4,7 +4,8 @@ import { useAccount, useReadContract, useReadContracts } from "wagmi";
 import type { Address } from "viem";
 
 import { ERC20_ABI, USDC_ADDRESS, USDC_ARC_ABI } from "./usdc";
-import { ROTA_ABI, ROTA_ADDRESS } from "./rota";
+import { ROTA_ABI } from "./rota";
+import { deploymentFor } from "./deployments";
 
 export type MemberStatus = {
   member: Address;
@@ -40,7 +41,12 @@ export function useUsdcDecimals() {
  * transaction brings the whole page up to date.
  */
 export function useCircle(circleId: bigint | undefined) {
-  const { address } = useAccount();
+  const { address, chainId } = useAccount();
+
+  // Follow the wallet's chain; fall back to the default deployment when there
+  // is no wallet, so the read-only views still work.
+  const deployment = deploymentFor(chainId);
+  const ROTA_ADDRESS = deployment?.rota;
 
   const enabled = Boolean(ROTA_ADDRESS) && circleId !== undefined;
 

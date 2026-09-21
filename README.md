@@ -45,13 +45,21 @@ round is a single transaction. The 20-member round below settled in one block.
 
 ## Evidence
 
-Deployed on Arc testnet (chain `5042002`):
+### Deployments
 
-**[`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808)**
-— deployed in block 63306726.
+| network | chain | address |
+| --- | --- | --- |
+| Arc testnet | `5042002` | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 |
+| Arc mainnet | `5042` | not deployed yet |
 
-USDC is the predeploy at `0x3600000000000000000000000000000000000000`, 6
-decimals, read from the token rather than assumed.
+USDC is the predeploy at `0x3600000000000000000000000000000000000000` on both,
+6 decimals, read from the token rather than assumed.
+
+Mainnet uses `MAINNET_PRIVATE_KEY`, never the testnet `PRIVATE_KEY`. The deploy
+script refuses to run against chain 5042 without it, prints the deployer and its
+USDC balance, and then waits for a typed confirmation at an interactive prompt.
+There is no flag to skip that prompt, so a mainnet deploy cannot be made by
+anything that is not a person at a terminal.
 
 ### Custody, checked on real receipts
 
@@ -166,9 +174,13 @@ cp web/.env.example web/.env.local
 npm run dev
 ```
 
-The app is wired to Arc testnet only. `arcMainnet` reads its chain id and RPC
-URL from the environment and is registered as a Hardhat network only when both
-are set, so no mainnet values live in this repo.
+The app supports both Arc chains and follows whichever one the wallet is on,
+using the contract deployed there. A chain with no configured address is simply
+not offered, so with only `NEXT_PUBLIC_ROTA_ADDRESS` set the app is testnet-only.
+
+`arcMainnet` reads its chain id and RPC URL from the environment and is
+registered as a Hardhat network only when both are set, so no mainnet RPC lives
+in this repo.
 
 ### Layout
 

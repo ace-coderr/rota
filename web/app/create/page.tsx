@@ -12,9 +12,9 @@ import {
   wrongNetworkFailure,
   type TxFailure,
 } from "@/lib/errors";
-import { ROTA_ABI, ROTA_ADDRESS } from "@/lib/rota";
+import { ROTA_ABI } from "@/lib/rota";
+import { deploymentFor } from "@/lib/deployments";
 import { useUsdcDecimals } from "@/lib/useRota";
-import { EXPECTED_CHAIN_ID } from "@/lib/wagmi";
 
 const FREQUENCIES = [
   { label: "Every week", seconds: "604800" },
@@ -69,7 +69,12 @@ export default function CreatePage() {
     problems.push("Someone is listed twice. Each person can only appear once.");
   }
 
-  const networkFailure = wrongNetworkFailure(chainId, EXPECTED_CHAIN_ID);
+  const deployment = deploymentFor(chainId);
+  const ROTA_ADDRESS = deployment?.rota;
+  const networkFailure =
+    isConnected && !deployment
+      ? wrongNetworkFailure(chainId, -1)
+      : undefined;
   const ready =
     isConnected &&
     !networkFailure &&

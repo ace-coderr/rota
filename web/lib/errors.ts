@@ -258,6 +258,10 @@ export function classifyTxError(
   };
 }
 
+/**
+ * "Wrong network" now means there is no Rota on the chain the wallet is on,
+ * since Rota is deployed to more than one.
+ */
 export function wrongNetworkFailure(
   connectedChainId: number | undefined,
   expectedChainId: number,

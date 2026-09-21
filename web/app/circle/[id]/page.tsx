@@ -34,10 +34,10 @@ import {
   walletNeeded,
 } from "@/lib/money";
 import { useNames } from "@/lib/people";
-import { ROTA_ABI, ROTA_ADDRESS } from "@/lib/rota";
+import { ROTA_ABI } from "@/lib/rota";
+import { deploymentFor } from "@/lib/deployments";
 import { useCircle } from "@/lib/useRota";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
-import { EXPECTED_CHAIN_ID } from "@/lib/wagmi";
 
 export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const { id } = use(params);
@@ -65,7 +65,12 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const [pending, setPending] = useState<string | undefined>();
   const [showNames, setShowNames] = useState(false);
 
-  const networkFailure = wrongNetworkFailure(chainId, EXPECTED_CHAIN_ID);
+  const deployment = deploymentFor(chainId);
+  const ROTA_ADDRESS = deployment?.rota;
+  const networkFailure =
+    isConnected && !deployment
+      ? wrongNetworkFailure(chainId, -1)
+      : undefined;
 
   // ----------------------------------------------------------------- derived
 

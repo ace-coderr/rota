@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { usePublicClient, useReadContracts } from "wagmi";
+import { useAccount, usePublicClient, useReadContracts } from "wagmi";
 import type { Address, PublicClient } from "viem";
 
 import { addressUrl, txUrl } from "@/lib/explorer";
 import { dateInWords, money, shortAddress } from "@/lib/format";
 import { useNames } from "@/lib/people";
-import { ROTA_ABI, ROTA_ADDRESS, ROTA_DEPLOY_BLOCK } from "@/lib/rota";
+import { ROTA_ABI } from "@/lib/rota";
+import { deploymentFor } from "@/lib/deployments";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
 
 /**
@@ -20,6 +21,14 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const { id } = use(params);
   const circleId = /^\d+$/.test(id) ? BigInt(id) : undefined;
   const publicClient = usePublicClient();
+
+  // No wallet needed. Follow the connected chain when there is one, otherwise
+  // show the default deployment.
+  const { chainId } = useAccount();
+  const deployment = deploymentFor(chainId);
+  const ROTA_ADDRESS = deployment?.rota;
+  const ROTA_DEPLOY_BLOCK = deployment?.deployBlock ?? 0n;
+  const explorer = deployment?.explorer ?? "";
 
   const reads = useReadContracts({
     allowFailure: false,
@@ -115,8 +124,8 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
       <div className="card card-quiet">
         <p className="small muted" style={{ margin: 0 }}>
-          Checked live on Arc just now.{" "}
-          <a href={addressUrl(ROTA_ADDRESS)} target="_blank" rel="noreferrer">
+          Checked live on {deployment?.label ?? "Arc"} just now.{" "}
+          <a href={addressUrl(explorer, ROTA_ADDRESS)} target="_blank" rel="noreferrer">
             See it for yourself
           </a>
           .
@@ -136,7 +145,7 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
                 <br />
                 <a
                   className="address"
-                  href={addressUrl(member)}
+                  href={addressUrl(explorer, member)}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -186,7 +195,7 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
                 <br />
                 <span className="person-detail">
                   {dateInWords(row.timestamp)} ·{" "}
-                  <a href={txUrl(row.hash)} target="_blank" rel="noreferrer">
+                  <a href={txUrl(explorer, row.hash)} target="_blank" rel="noreferrer">
                     See the record
                   </a>
                 </span>
