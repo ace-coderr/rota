@@ -28,7 +28,13 @@ if (!ROTA_ADDRESS) throw new Error("Set ROTA_ADDRESS to the deployed contract.")
 
 const PERIOD = 60n; // one minute, so a 3-cycle run finishes in a few minutes
 const CONTRIBUTION_WHOLE = "0.10"; // USDC per member per cycle
-const GAS_TOPUP = parseUnits("0.05", 18); // native gas for members 2 and 3
+/**
+ * On Arc, USDC *is* the native coin: balanceOf() is the native balance
+ * truncated from 18 decimals to 6. So gas and contributions are spent from the
+ * same pot. A member funded with exactly their rotation total goes short the
+ * moment they pay for their own approve, so fund the rotation plus a buffer.
+ */
+const GAS_BUFFER_6DP = "0.05";
 
 const { viem, networkName } = await network.getOrCreate();
 const publicClient = await viem.getPublicClient();
@@ -102,28 +108,23 @@ const rota = await viem.getContractAt("Rota", ROTA_ADDRESS);
 
 // ---------------------------------------------------------------- fund 2 & 3
 console.log("\n=== funding members 2 and 3 ===");
+const TARGET = FULL_ROTATION + parseUnits(GAS_BUFFER_6DP, decimals);
+
 for (const wallet of members234) {
   const who = wallet.account!.address as Address;
-
-  const gas = await publicClient.getBalance({ address: who });
-  if (gas < GAS_TOPUP / 2n) {
-    const hash = await member1.sendTransaction({ to: who, value: GAS_TOPUP });
-    await send(`gas -> ${who}`, hash);
-  } else {
-    console.log(`  gas -> ${who}: already funded`);
-  }
-
   const held = await usdcOf(who);
-  if (held < FULL_ROTATION) {
+
+  if (held < TARGET) {
+    // One transfer covers both roles, because they are the same balance.
     const hash = await member1.writeContract({
       address: USDC_ADDRESS,
       abi: ERC20_ABI,
       functionName: "transfer",
-      args: [who, FULL_ROTATION - held],
+      args: [who, TARGET - held],
     });
-    await send(`usdc -> ${who}`, hash);
+    await send(`fund ${who} to ${fmt(TARGET)} (rotation + gas)`, hash);
   } else {
-    console.log(`  usdc -> ${who}: already funded`);
+    console.log(`  ${who}: already funded (${fmt(held)})`);
   }
 }
 
