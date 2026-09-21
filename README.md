@@ -24,8 +24,8 @@ through the ERC-20 interface. The shared definitions live in
 
 | Network      | Chain id  | RPC                                | Explorer                     |
 | ------------ | --------- | ---------------------------------- | ---------------------------- |
-| `arcTestnet` | `5042002` | `https://rpc.testnet.arc.network`  | https://testnet.arcscan.app  |
-| `arcMainnet` | from env  | from env                           | https://arcscan.app          |
+| `arcTestnet` | `5042002` | `https://rpc.testnet.arc.network`  | https://explorer.testnet.arc.io |
+| `arcMainnet` | from env  | from env                           | https://explorer.arc.io         |
 
 `arcMainnet` reads `ARC_MAINNET_CHAIN_ID` and `ARC_MAINNET_RPC_URL` from the
 environment and is only registered as a Hardhat network when both are set, so

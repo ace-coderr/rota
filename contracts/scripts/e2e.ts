@@ -40,7 +40,7 @@ const { viem, networkName } = await network.getOrCreate();
 const publicClient = await viem.getPublicClient();
 const [deployerWallet] = await viem.getWalletClients();
 
-const explorer = "https://testnet.arcscan.app";
+const explorer = "https://explorer.testnet.arc.io";
 const txLink = (hash: string) => `${explorer}/tx/${hash}`;
 
 const deployerKey = (

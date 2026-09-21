@@ -64,9 +64,9 @@ const config: HardhatUserConfig = {
       name: "Arc Testnet",
       blockExplorers: {
         blockscout: {
-          name: "Arcscan",
-          url: "https://testnet.arcscan.app",
-          apiUrl: "https://testnet.arcscan.app/api",
+          name: "Arc Explorer",
+          url: "https://explorer.testnet.arc.io",
+          apiUrl: "https://explorer.testnet.arc.io/api",
         },
       },
     },
