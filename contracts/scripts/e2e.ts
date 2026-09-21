@@ -21,7 +21,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { ERC20_ABI, USDC_ADDRESS } from "../lib/usdc.js";
+import { ERC20_ABI, NATIVE_COIN_AUTHORITY, USDC_ADDRESS } from "../lib/usdc.js";
 
 const ROTA_ADDRESS = process.env.ROTA_ADDRESS as Address | undefined;
 if (!ROTA_ADDRESS) throw new Error("Set ROTA_ADDRESS to the deployed contract.");
@@ -192,10 +192,58 @@ for (let cycle = 0; cycle < addresses.length; cycle++) {
     functionName: "disburse",
     args: [circleId],
   });
-  await send(`disburse cycle ${cycle} -> ${addresses[cycle]}`, hash);
+  const receipt = await send(
+    `disburse cycle ${cycle} -> ${addresses[cycle]}`,
+    hash,
+  );
 
   const heldByRota = await usdcOf(ROTA_ADDRESS);
   console.log(`    rota's usdc balance: ${fmt(heldByRota)} ${heldByRota === 0n ? "(ok)" : "(INVARIANT BROKEN)"}`);
+
+  // The custody invariant, checked against the real token rather than a mock.
+  //
+  // Every movement emits TWO Transfer logs with the same topic0 and the same
+  // from/to: one from the USDC predeploy (6 decimals) and one from the native
+  // coin authority (18 decimals). Counting both would report twice the
+  // transfers at two different scales, so filter to the predeploy.
+  const TRANSFER_TOPIC =
+    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+
+  const allTransfers = receipt.logs.filter(
+    (log) => log.topics[0] === TRANSFER_TOPIC,
+  );
+  const fromPredeploy = allTransfers.filter(
+    (log) => log.address.toLowerCase() === USDC_ADDRESS.toLowerCase(),
+  );
+  const fromAuthority = allTransfers.filter(
+    (log) => log.address.toLowerCase() === NATIVE_COIN_AUTHORITY.toLowerCase(),
+  );
+
+  const expected = addresses.length - 1;
+  const rotaLower = ROTA_ADDRESS.toLowerCase();
+  const topicAddr = (topic: string) => ("0x" + topic.slice(26)).toLowerCase();
+
+  for (const log of fromPredeploy) {
+    const from = topicAddr(log.topics[1]!);
+    const to = topicAddr(log.topics[2]!);
+    if (from === rotaLower || to === rotaLower) {
+      throw new Error(
+        `INVARIANT BROKEN: cycle ${cycle} moved USDC ${from === rotaLower ? "out of" : "into"} Rota`,
+      );
+    }
+  }
+
+  if (fromPredeploy.length !== expected) {
+    throw new Error(
+      `cycle ${cycle}: expected ${expected} predeploy Transfer logs, saw ${fromPredeploy.length}`,
+    );
+  }
+
+  console.log(
+    `    transfers: ${fromPredeploy.length} from the predeploy (expected ${expected}), ` +
+      `${fromAuthority.length} duplicate(s) from the native authority, ` +
+      `Rota never an endpoint (ok)`,
+  );
 }
 
 // -------------------------------------------------------------------- result

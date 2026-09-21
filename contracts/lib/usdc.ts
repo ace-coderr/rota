@@ -12,6 +12,23 @@
 // balance anywhere in this project.
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000" as const;
 
+/**
+ * Arc's native coin authority, which is the *other* emitter of every USDC
+ * movement.
+ *
+ * A single transfer produces TWO Transfer logs with the same topic0 and the
+ * same indexed from/to:
+ *
+ *   0x3600…0000 (the USDC predeploy)  value in 6 decimals
+ *   0xffff…fffe (this address)        value in 18 decimals
+ *
+ * Verified on testnet disburse receipts. Anything that parses Transfer logs
+ * must filter by emitter, or it will double-count every movement and read
+ * 18-decimal values as if they were 6-decimal.
+ */
+export const NATIVE_COIN_AUTHORITY =
+  "0xfffffffffffffffffffffffffffffffffffffffe" as const;
+
 export const USDC_DECIMALS = 6 as const;
 
 export const ERC20_ABI = [

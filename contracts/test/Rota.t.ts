@@ -89,9 +89,15 @@ async function disburse(ctx: Ctx, caller = outsider) {
     logs: receipt.logs,
     eventName: "Disbursed",
   });
+  // Filter by emitter. On Arc every USDC movement emits two Transfer logs
+  // with identical topics and from/to: one from the USDC predeploy carrying
+  // the 6-decimal value, and one from the native coin authority carrying the
+  // 18-decimal value. Parsing without an address filter double-counts every
+  // transfer and mixes the two scales. MockUSDC has no second emitter, but the
+  // filter is the production-correct shape and is asserted for real in e2e.ts.
   const transfers = parseEventLogs({
     abi: ctx.token.abi,
-    logs: receipt.logs,
+    logs: onlyFrom(receipt.logs, ctx.token.address),
     eventName: "Transfer",
   }).map((log) => log.args as { from: Address; to: Address; value: bigint });
 
@@ -104,6 +110,25 @@ async function disburse(ctx: Ctx, caller = outsider) {
     }),
     transfers,
   };
+}
+
+/**
+ * Narrows a receipt's logs to a single emitter.
+ *
+ * On Arc every USDC movement emits TWO Transfer logs with the same topic0 and
+ * the same indexed from/to: one from the USDC predeploy carrying the 6-decimal
+ * value, and one from the native coin authority (0xffff…fffe) carrying the
+ * 18-decimal value. Parsing without filtering double-counts every transfer and
+ * mixes the two scales. viem's parseEventLogs has no address option, so the
+ * filter has to happen on the logs array.
+ *
+ * MockUSDC has no second emitter, so locally this is a no-op — it keeps the
+ * test the same shape as production, and e2e.ts asserts the real behaviour.
+ */
+function onlyFrom<T extends { address: string }>(logs: T[], emitter: string) {
+  return logs.filter(
+    (log) => log.address.toLowerCase() === emitter.toLowerCase(),
+  );
 }
 
 async function expectRevert(promise: Promise<unknown>, needle?: string) {
@@ -502,9 +527,11 @@ describe("Rota", () => {
 
     assert.equal(receipt.status, "success");
 
+    // Emitter-filtered, as above: on Arc the native coin authority emits a
+    // duplicate Transfer for every movement.
     const transfers = parseEventLogs({
       abi: token.abi,
-      logs: receipt.logs,
+      logs: onlyFrom(receipt.logs, token.address),
       eventName: "Transfer",
     });
     assert.equal(transfers.length, size - 1, "expected 19 paying members");
