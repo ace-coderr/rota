@@ -7,13 +7,14 @@ import { usePublicClient, useReadContracts } from "wagmi";
 import type { Address, PublicClient } from "viem";
 
 import { addressUrl, txUrl } from "@/lib/explorer";
-import { formatTimestamp, formatUsdc } from "@/lib/format";
+import { dateInWords, money, shortAddress } from "@/lib/format";
+import { useNames } from "@/lib/people";
 import { ROTA_ABI, ROTA_ADDRESS, ROTA_DEPLOY_BLOCK } from "@/lib/rota";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
 
 /**
- * Public, read-only. No wallet connection required: everything here comes from
- * the chain through the app's own RPC transport.
+ * Public and wallet-free. Everything here is read straight from the chain, so
+ * anyone can check a circle without an account and without trusting this site.
  */
 export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const { id } = use(params);
@@ -23,13 +24,9 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const reads = useReadContracts({
     allowFailure: false,
     contracts: [
+      { address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "decimals" },
       {
-        address: USDC_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: "decimals",
-      },
-      {
-        // The core claim, checkable by anyone: Rota's own USDC balance.
+        // The claim, checkable by anyone: what Rota itself is holding.
         address: USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: "balanceOf",
@@ -52,6 +49,8 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   });
 
   const [decimals, rotaBalance, members, circle] = reads.data ?? [];
+  const memberList = (members as Address[] | undefined) ?? [];
+  const naming = useNames(id, memberList);
 
   const history = useQuery({
     queryKey: ["disbursed", ROTA_ADDRESS, id],
@@ -67,7 +66,6 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
         toBlock: "latest",
       });
 
-      // Timestamps come from the blocks the events landed in.
       const blocks = new Map<bigint, bigint>();
       for (const log of logs) {
         if (!blocks.has(log.blockNumber)) {
@@ -81,7 +79,6 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
         recipient: log.args.recipient as Address,
         totalPaid: log.args.totalPaid as bigint,
         hash: log.transactionHash,
-        blockNumber: log.blockNumber,
         timestamp: blocks.get(log.blockNumber),
       }));
     },
@@ -90,114 +87,113 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   if (!ROTA_ADDRESS) {
     return (
       <main>
-        <h1>Proof — circle {id}</h1>
-        <p role="alert">
-          <strong>Not configured.</strong> Set{" "}
-          <code>NEXT_PUBLIC_ROTA_ADDRESS</code> in <code>web/.env.local</code>.
-        </p>
+        <h1>Record unavailable</h1>
+        <p>Rota isn&rsquo;t set up on this site yet.</p>
       </main>
     );
   }
 
-  const memberList = (members as Address[] | undefined) ?? [];
-
   return (
     <main>
-      <h1>Proof — circle {id}</h1>
-      <p>
-        Public record. No wallet needed. Everything below is read straight from
-        Arc testnet.
-      </p>
-      <p>
-        <Link href="/">Home</Link> · <Link href={`/circle/${id}`}>Circle page</Link>
+      <Link href={`/circle/${id}`} className="back">
+        ← Back to the circle
+      </Link>
+
+      <h1>Rota is holding</h1>
+
+      <p className="hero-figure">
+        {reads.isLoading ? "—" : money(rotaBalance as bigint | undefined, decimals as number | undefined)}
+        <span className="hero-unit">USDC</span>
       </p>
 
-      <h2>Rota holds no USDC</h2>
-      <p>
-        Contract:{" "}
-        <a href={addressUrl(ROTA_ADDRESS)} target="_blank" rel="noreferrer">
-          <code>{ROTA_ADDRESS}</code>
-        </a>
-      </p>
-      <p>
-        Live USDC balance of the Rota contract:{" "}
-        <strong>
-          {reads.isLoading
-            ? "…"
-            : `${formatUsdc(rotaBalance as bigint | undefined, decimals as number | undefined)} USDC`}
-        </strong>
-      </p>
-      <p>
-        <small>
-          Every contribution moves wallet to wallet. If this figure is ever
-          anything but 0, the core claim is broken.
-        </small>
+      <p className="lede" style={{ marginTop: "1rem" }}>
+        Rota never holds anyone&rsquo;s savings. Each person&rsquo;s share goes
+        straight from their wallet to whoever&rsquo;s turn it is, so this number
+        stays at zero — and anyone can check it, at any time, without taking
+        our word for it.
       </p>
 
-      <h2>Rotation</h2>
+      <div className="card card-quiet">
+        <p className="small muted" style={{ margin: 0 }}>
+          Checked live on Arc just now.{" "}
+          <a href={addressUrl(ROTA_ADDRESS)} target="_blank" rel="noreferrer">
+            See it for yourself
+          </a>
+          .
+        </p>
+      </div>
+
+      <h2>Who&rsquo;s in this circle</h2>
       {memberList.length === 0 ? (
-        <p>No such circle, or it has no members.</p>
+        <p className="muted">There&rsquo;s no circle number {id}.</p>
       ) : (
-        <ol>
-          {memberList.map((member) => (
-            <li key={member}>
-              <a href={addressUrl(member)} target="_blank" rel="noreferrer">
-                <code>{member}</code>
-              </a>
-            </li>
+        <div className="card">
+          {memberList.map((member, index) => (
+            <div className="person" key={member}>
+              <span className="person-turn">{index + 1}.</span>
+              <span>
+                <span className="person-name">{naming.nameOf(member)}</span>
+                <br />
+                <a
+                  className="address"
+                  href={addressUrl(member)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {shortAddress(member)}
+                </a>
+              </span>
+              <span className="person-status">
+                {circle && index < Number(circle[3]) ? (
+                  <span className="tag-paid">Paid</span>
+                ) : (
+                  <span className="muted">Waiting</span>
+                )}
+              </span>
+            </div>
           ))}
-        </ol>
+        </div>
       )}
-      {circle && (
-        <p>
-          Cycle {Number(circle[3])} of {memberList.length} ·{" "}
-          {circle[4] ? "started" : "not started"} · contribution{" "}
-          {formatUsdc(circle[0], decimals as number | undefined)} USDC
+
+      <h2>What&rsquo;s happened so far</h2>
+
+      {history.isLoading && <p className="muted">Loading the record…</p>}
+
+      {history.error && (
+        <div className="notice notice-wait">
+          <p className="notice-title">The record couldn&rsquo;t be loaded.</p>
+          <p className="small">Please try again in a moment.</p>
+        </div>
+      )}
+
+      {history.data?.length === 0 && (
+        <p className="muted">
+          Nobody has been paid yet. The record will appear here as each turn
+          happens.
         </p>
       )}
 
-      <h2>Disbursement history</h2>
-      {history.isLoading && <p>Reading Disbursed events…</p>}
-      {history.error && (
-        <p role="alert">
-          Could not read history:{" "}
-          <code>{(history.error as Error).message.split("\n")[0]}</code>
-        </p>
-      )}
-      {history.data?.length === 0 && <p>Nothing disbursed yet.</p>}
       {history.data && history.data.length > 0 && (
-        <table>
-          <thead>
-            <tr>
-              <th>Cycle</th>
-              <th>Recipient</th>
-              <th>Total paid</th>
-              <th>When</th>
-              <th>Transaction</th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.data.map((row) => (
-              <tr key={row.hash}>
-                <td>{row.cycleIndex}</td>
-                <td>
-                  <a href={addressUrl(row.recipient)} target="_blank" rel="noreferrer">
-                    <code>{row.recipient}</code>
-                  </a>
-                </td>
-                <td>
-                  {formatUsdc(row.totalPaid, decimals as number | undefined)} USDC
-                </td>
-                <td>{formatTimestamp(row.timestamp)}</td>
-                <td>
+        <div className="card">
+          {history.data.map((row) => (
+            <div className="person" key={row.hash}>
+              <span className="person-turn">{row.cycleIndex + 1}.</span>
+              <span>
+                <span className="person-name">
+                  {naming.nameOf(row.recipient)} received{" "}
+                  {money(row.totalPaid, decimals as number | undefined)} USDC
+                </span>
+                <br />
+                <span className="person-detail">
+                  {dateInWords(row.timestamp)} ·{" "}
                   <a href={txUrl(row.hash)} target="_blank" rel="noreferrer">
-                    <code>{row.hash.slice(0, 18)}…</code>
+                    See the record
                   </a>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </main>
   );

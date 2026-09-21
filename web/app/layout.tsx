@@ -1,30 +1,25 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// One typeface, everywhere — including amounts and addresses.
+const sans = Source_Sans_3({
+  variable: "--font-sans-stack",
   subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Rota",
-  description: "USDC payments on Arc",
+  title: "Rota — save together",
+  description:
+    "A savings circle where everyone takes a turn. Your money stays in your own wallet until it is someone's turn.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">
+    <html lang="en" className={sans.variable}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

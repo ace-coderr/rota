@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { use, useState } from "react";
-import { useAccount, useBlock, usePublicClient, useWriteContract } from "wagmi";
+import type { Address } from "viem";
+import {
+  useAccount,
+  useBlock,
+  useGasPrice,
+  usePublicClient,
+  useWriteContract,
+} from "wagmi";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { WalletBar } from "@/components/WalletBar";
@@ -11,13 +18,16 @@ import {
   wrongNetworkFailure,
   type TxFailure,
 } from "@/lib/errors";
-import { addressUrl, short, txUrl } from "@/lib/explorer";
 import {
-  describePeriod,
-  formatTimestamp,
-  formatUsdc,
+  everyInWords,
+  money,
+  nameList,
   sameAddress,
+  shortAddress,
+  whenInWords,
 } from "@/lib/format";
+import { feeBuffer, permissionNeeded, walletNeeded } from "@/lib/money";
+import { useNames } from "@/lib/people";
 import { ROTA_ABI, ROTA_ADDRESS } from "@/lib/rota";
 import { useCircle } from "@/lib/useRota";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
@@ -30,6 +40,8 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const { address, isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { writeContractAsync } = useWriteContract();
+  const { data: latestBlock } = useBlock({ watch: true });
+  const { data: gasPrice } = useGasPrice();
 
   const {
     circle,
@@ -38,53 +50,93 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     rotaBlocked,
     preview,
     decimals,
-    myAllowance,
-    myBalance,
-    isLoading,
-    error,
     refetchAll,
+    isLoading,
   } = useCircle(circleId);
 
+  const naming = useNames(id, members);
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [pending, setPending] = useState<string | undefined>();
-  const [lastHash, setLastHash] = useState<`0x${string}` | undefined>();
-
-  // Due-ness is decided by the chain against block.timestamp, so compare
-  // against the latest block rather than the browser clock. Watching the block
-  // also re-renders the page as time passes, so the button enables itself when
-  // the cycle falls due without anyone reloading.
-  const { data: latestBlock } = useBlock({ watch: true });
-  const chainNow = latestBlock?.timestamp;
+  const [showNames, setShowNames] = useState(false);
 
   const networkFailure = wrongNetworkFailure(chainId, EXPECTED_CHAIN_ID);
 
-  if (!ROTA_ADDRESS) {
-    return (
-      <main>
-        <h1>Circle {id}</h1>
-        <p role="alert">
-          <strong>Not configured.</strong> Set{" "}
-          <code>NEXT_PUBLIC_ROTA_ADDRESS</code> in <code>web/.env.local</code>.
-        </p>
-      </main>
-    );
-  }
+  // ----------------------------------------------------------------- derived
 
-  if (circleId === undefined) {
-    return (
-      <main>
-        <h1>Circle {id}</h1>
-        <p role="alert">That is not a valid circle id.</p>
-        <Link href="/">Home</Link>
-      </main>
-    );
-  }
+  const memberCount = members?.length ?? 0;
+  const cycleIndex = circle?.cycleIndex ?? 0;
+  const finished = Boolean(circle && memberCount > 0 && cycleIndex >= memberCount);
+  const started = Boolean(circle?.started);
+  const recipient = members && !finished ? members[cycleIndex] : undefined;
 
-  /** Runs a write, then re-reads every value on the page. */
+  const myIndex = members?.findIndex((m) => sameAddress(m, address)) ?? -1;
+  const isMember = myIndex >= 0;
+  const myTurn = sameAddress(recipient, address);
+
+  const buffer = feeBuffer(gasPrice);
+  const contribution = circle?.contribution ?? 0n;
+  const pot = contribution * BigInt(Math.max(0, memberCount - 1));
+
+  /**
+   * One figure per person: everything they still owe across the rest of the
+   * circle, with the network charge already folded in. On Arc both come out of
+   * the same balance, so they are never shown separately — and readiness is
+   * judged against this combined figure, not against the share alone.
+   */
+  const needFor = (index: number) =>
+    walletNeeded(contribution, index, cycleIndex, memberCount, buffer);
+  const permissionFor = (index: number) =>
+    permissionNeeded(contribution, index, cycleIndex, memberCount);
+
+  type Standing = {
+    member: Address;
+    index: number;
+    name: string;
+    balance: bigint;
+    hasJoined: boolean;
+    hasEnough: boolean;
+    blocked: boolean;
+    ready: boolean;
+    needed: bigint;
+  };
+
+  const standings: Standing[] = (preview ?? []).map((status, index) => {
+    const needed = needFor(index);
+    const blocked = blockedMembers.some((b) => sameAddress(b, status.member));
+    const hasJoined = status.allowance >= permissionFor(index);
+    const hasEnough = status.balance >= needed;
+    return {
+      member: status.member,
+      index,
+      name: naming.nameOf(status.member),
+      balance: status.balance,
+      hasJoined,
+      hasEnough,
+      blocked,
+      ready: hasJoined && hasEnough && !blocked,
+      needed,
+    };
+  });
+
+  const owing = standings.filter((s) => s.needed > 0n);
+  const notJoined = owing.filter((s) => !s.hasJoined && !s.blocked);
+  const notFunded = owing.filter((s) => s.hasJoined && !s.hasEnough && !s.blocked);
+  const everyoneReady =
+    preview !== undefined && owing.every((s) => s.ready) && !rotaBlocked;
+
+  const mine = myIndex >= 0 ? standings[myIndex] : undefined;
+  const iNeed = isMember ? needFor(myIndex) : 0n;
+  const iOwe = isMember ? permissionFor(myIndex) : 0n;
+
+  const chainNow = latestBlock?.timestamp;
+  const due = Boolean(
+    started && chainNow !== undefined && circle && chainNow >= circle.nextDueAt,
+  );
+
+  const busy = pending !== undefined;
+
   async function run(label: string, send: () => Promise<`0x${string}`>) {
     setFailure(undefined);
-    setLastHash(undefined);
-
     if (networkFailure) {
       setFailure(networkFailure);
       return;
@@ -93,353 +145,417 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     setPending(label);
     try {
       const hash = await send();
-      setLastHash(hash);
       await publicClient!.waitForTransactionReceipt({ hash });
       await refetchAll();
-    } catch (err) {
-      setFailure(classifyTxError(err));
+    } catch (error) {
+      setFailure(
+        classifyTxError(error, {
+          shortNames: [...notJoined, ...notFunded].map((s) => s.name),
+          nameOf: naming.nameOf,
+        }),
+      );
     } finally {
       setPending(undefined);
     }
   }
 
-  const memberCount = members?.length ?? 0;
-  const cycleIndex = circle?.cycleIndex ?? 0;
-  const complete = Boolean(circle && memberCount > 0 && cycleIndex >= memberCount);
-  const recipient = members && !complete ? members[cycleIndex] : undefined;
+  // ------------------------------------------------------------- early exits
 
-  const isMember = Boolean(
-    address && members?.some((m) => sameAddress(m, address)),
+  if (!ROTA_ADDRESS || circleId === undefined) {
+    return (
+      <main>
+        <Link href="/" className="back">
+          ← Back
+        </Link>
+        <h1>Circle not found</h1>
+        <p>Check the number you were given and try again.</p>
+      </main>
+    );
+  }
+
+  // Narrowed once, so the callbacks below do not each have to re-prove it.
+  const rota: Address = ROTA_ADDRESS;
+
+  if (isLoading && !circle) {
+    return (
+      <main>
+        <h1>Circle {id}</h1>
+        <p className="muted">Loading…</p>
+      </main>
+    );
+  }
+
+  if (circle && memberCount === 0) {
+    return (
+      <main>
+        <Link href="/" className="back">
+          ← Back
+        </Link>
+        <h1>Circle not found</h1>
+        <p>There&rsquo;s no circle number {id}. Check the number you were given.</p>
+      </main>
+    );
+  }
+
+  // ----------------------------------------------------------------- people
+
+  const peopleList = (
+    <>
+      <h2>Everyone in this circle</h2>
+      <div className="card">
+        {standings.map((s) => (
+          <div className="person" key={s.member}>
+            <span className="person-turn">{s.index + 1}.</span>
+            <span>
+              <span className="person-name">
+                {s.name}
+                {sameAddress(s.member, address) && " (you)"}
+              </span>
+              <br />
+              <span className="address">{shortAddress(s.member)}</span>
+            </span>
+            <span className="person-status">
+              {s.index < cycleIndex ? (
+                <span className="tag-paid">Paid</span>
+              ) : s.index === cycleIndex && started ? (
+                <span className="tag-now">Their turn</span>
+              ) : s.blocked ? (
+                <span className="tag-short">On hold</span>
+              ) : !s.hasJoined ? (
+                <span className="tag-short">Not joined</span>
+              ) : !s.hasEnough ? (
+                <span className="tag-short">Short</span>
+              ) : (
+                <span className="muted">Ready</span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        className="btn-link"
+        onClick={() => setShowNames((v) => !v)}
+      >
+        {showNames ? "Done adding names" : "Add names for these people"}
+      </button>
+
+      {showNames && (
+        <div className="card card-quiet" style={{ marginTop: "1rem" }}>
+          <p className="small muted">
+            Names are kept on this device only, so you see people instead of
+            addresses.
+          </p>
+          {standings.map((s) => (
+            <div className="field" key={s.member} style={{ marginBottom: "1rem" }}>
+              <label htmlFor={`name-${s.member}`}>
+                Person {s.index + 1} — {shortAddress(s.member)}
+              </label>
+              <input
+                id={`name-${s.member}`}
+                defaultValue={naming.isCustom(s.member) ? s.name : ""}
+                placeholder="Their name"
+                onBlur={(e) => naming.setName(s.member, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
-  const iAmRecipient = sameAddress(recipient, address);
 
-  // What the connected address owes this cycle: nothing if they are being paid,
-  // or are not in the circle, or the circle is finished.
-  const owedThisCycle =
-    !circle || complete || !isMember || iAmRecipient ? 0n : circle.contribution;
+  // --------------------------------------------------------------- finished
+  // A finished circle is a receipt, not a checklist. No readiness anywhere.
 
-  // Joining is a single approve for the whole rotation.
-  const requiredAllowance =
-    circle && memberCount > 1
-      ? circle.contribution * BigInt(memberCount - 1)
-      : 0n;
-  const allowanceShort =
-    myAllowance !== undefined && myAllowance < requiredAllowance;
+  if (finished) {
+    return (
+      <main>
+        <Link href="/" className="back">
+          ← Back
+        </Link>
+        <h1>This circle is finished</h1>
+        <p className="lede">
+          Everyone has had their turn. Nothing is owed and nothing is
+          outstanding.
+        </p>
 
-  // Short = has not approved enough, or does not hold enough. Blocked = the
-  // protocol refuses to move their USDC at all. They are different problems
-  // with different remedies, so they are never merged into one message.
-  const shortMembers = (preview ?? []).filter((status) => !status.ready);
-  const anyBlocked = blockedMembers.length > 0 || rotaBlocked === true;
-  const everyoneReady =
-    preview !== undefined && shortMembers.length === 0 && !anyBlocked;
+        <div className="card">
+          <dl className="rows" style={{ borderTop: "none" }}>
+            <div className="row" style={{ paddingTop: 0 }}>
+              <dt>People</dt>
+              <dd>{memberCount}</dd>
+            </div>
+            <div className="row">
+              <dt>Each person put in</dt>
+              <dd>{money(contribution, decimals)} USDC a round</dd>
+            </div>
+            <div className="row" style={{ borderBottom: "none" }}>
+              <dt>Each person received</dt>
+              <dd>{money(pot, decimals)} USDC</dd>
+            </div>
+          </dl>
+        </div>
 
-  const isBlocked = (member: string) =>
-    blockedMembers.some((blocked) => sameAddress(blocked, member));
+        {peopleList}
 
-  const due = Boolean(
-    circle?.started && chainNow !== undefined && chainNow >= circle.nextDueAt,
-  );
+        <hr className="divider" />
+        <Link
+          href={`/proof/${id}`}
+          className="btn btn-secondary"
+          style={{ textDecoration: "none" }}
+        >
+          See the full record
+        </Link>
+      </main>
+    );
+  }
 
-  const busy = pending !== undefined;
+  // ------------------------------------------- the single action per screen
+
+  let action: React.ReactNode = null;
+  let actionNote: React.ReactNode = null;
+
+  if (isConnected && !rotaBlocked) {
+    if (isMember && mine && !mine.hasJoined) {
+      action = (
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() =>
+            run("join", () =>
+              writeContractAsync({
+                address: USDC_ADDRESS,
+                abi: ERC20_ABI,
+                functionName: "approve",
+                args: [rota, iOwe],
+              }),
+            )
+          }
+        >
+          {pending === "join" ? "Joining…" : "Join this circle"}
+        </button>
+      );
+      actionNote = (
+        <>
+          This lets Rota move your share to each person on their turn. Your
+          money stays in your wallet until then.
+        </>
+      );
+    } else if (!started && everyoneReady && isMember) {
+      action = (
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() =>
+            run("start", () =>
+              writeContractAsync({
+                address: rota,
+                abi: ROTA_ABI,
+                functionName: "start",
+                args: [circleId],
+              }),
+            )
+          }
+        >
+          {pending === "start" ? "Starting…" : "Start the circle"}
+        </button>
+      );
+      actionNote = (
+        <>
+          Everyone has joined. The first payment goes to{" "}
+          {standings[0]?.name ?? "the first person"}.
+        </>
+      );
+    } else if (started && due && everyoneReady) {
+      action = (
+        <button
+          type="button"
+          className="btn"
+          disabled={busy}
+          onClick={() =>
+            run("pay", () =>
+              writeContractAsync({
+                address: rota,
+                abi: ROTA_ABI,
+                functionName: "disburse",
+                args: [circleId],
+              }),
+            )
+          }
+        >
+          {pending === "pay"
+            ? "Sending…"
+            : `Send ${standings[cycleIndex]?.name ?? "this turn"}'s payment`}
+        </button>
+      );
+      actionNote = (
+        <>
+          Everyone&rsquo;s share goes straight to{" "}
+          {standings[cycleIndex]?.name ?? "them"}. Anyone in the circle can do
+          this.
+        </>
+      );
+    }
+  }
 
   return (
     <main>
-      <h1>Circle {id}</h1>
-      <p>
-        <Link href="/">Home</Link> · <Link href={`/proof/${id}`}>Public proof page</Link>
+      <Link href="/" className="back">
+        ← Back
+      </Link>
+
+      <h1>
+        {started
+          ? `${standings[cycleIndex]?.name ?? "Someone"}'s turn`
+          : `Circle ${id}`}
+      </h1>
+      <p className="lede">
+        {money(contribution, decimals)} USDC each, {everyInWords(circle?.period)}
+        {memberCount ? `, ${memberCount} people` : ""}.
       </p>
 
       <WalletBar />
 
-      {isLoading && <p>Loading circle…</p>}
-      {error && (
-        <p role="alert">
-          Could not read this circle: <code>{error.message.split("\n")[0]}</code>
-        </p>
+      {rotaBlocked && (
+        <div className="notice notice-stop">
+          <p className="notice-title">This circle is on hold.</p>
+          <p className="small">
+            USDC has placed a hold on Rota itself, so no circle can pay anyone
+            at the moment. Everyone&rsquo;s money is untouched and stays in
+            their own wallet. Please contact support.
+          </p>
+        </div>
       )}
 
-      {circle && memberCount === 0 && (
-        <p role="alert">
-          <strong>No such circle.</strong> Circle {id} does not exist yet.
-        </p>
+      {blockedMembers.length > 0 && !rotaBlocked && (
+        <div className="notice notice-stop">
+          <p className="notice-title">
+            {nameList(blockedMembers.map((m) => naming.nameOf(m)))}{" "}
+            {blockedMembers.length === 1 ? "is" : "are"} on hold.
+          </p>
+          <p className="small">
+            USDC has placed a hold on{" "}
+            {blockedMembers.length === 1 ? "that wallet" : "those wallets"}, so
+            the circle can&rsquo;t pay out for now. This isn&rsquo;t about money
+            running low, and nobody has been charged.
+          </p>
+        </div>
       )}
 
-      {circle && memberCount > 0 && (
-        <>
-          <h2>State</h2>
-          <table>
-            <tbody>
-              <tr>
-                <td>Contribution per member, per cycle</td>
-                <td>{formatUsdc(circle.contribution, decimals)} USDC</td>
-              </tr>
-              <tr>
-                <td>Period</td>
-                <td>{describePeriod(circle.period)}</td>
-              </tr>
-              <tr>
-                <td>Cycle index</td>
-                <td>
-                  {cycleIndex} of {memberCount}
-                </td>
-              </tr>
-              <tr>
-                <td>Next due at</td>
-                <td>
-                  {circle.started ? formatTimestamp(circle.nextDueAt) : "not started"}
-                </td>
-              </tr>
-              <tr>
-                <td>Whose turn</td>
-                <td>
-                  {complete ? (
-                    <em>complete — everyone has been paid</em>
-                  ) : (
-                    <>
-                      <a href={addressUrl(recipient!)} target="_blank" rel="noreferrer">
-                        <code>{recipient}</code>
-                      </a>
-                      {iAmRecipient && <strong> — that is you</strong>}
-                    </>
-                  )}
-                </td>
-              </tr>
-              <tr>
-                <td>You owe this cycle</td>
-                <td>
-                  {!isConnected
-                    ? "connect a wallet"
-                    : !isMember
-                      ? "you are not a member of this circle"
-                      : `${formatUsdc(owedThisCycle, decimals)} USDC`}
-                  {iAmRecipient && !complete && " (you are being paid this cycle)"}
-                </td>
-              </tr>
-              <tr>
-                <td>Your USDC balance</td>
-                <td>
-                  {isConnected ? `${formatUsdc(myBalance, decimals)} USDC` : "—"}
-                </td>
-              </tr>
-              <tr>
-                <td>Your allowance to Rota</td>
-                <td>
-                  {isConnected ? `${formatUsdc(myAllowance, decimals)} USDC` : "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <h2>Members, in payout order</h2>
-          <ol>
-            {members!.map((member, index) => (
-              <li key={member}>
-                <a href={addressUrl(member)} target="_blank" rel="noreferrer">
-                  <code>{member}</code>
-                </a>
-                {index === cycleIndex && !complete && " ← paid this cycle"}
-                {sameAddress(member, address) && " (you)"}
-              </li>
-            ))}
-          </ol>
-
-          <h2>Round preview</h2>
-          <p>
-            Read from <code>previewRound</code> before anyone signs, so a short
-            member is named rather than discovered by a failed transaction.
+      {isConnected && isMember && iNeed > 0n && (
+        <div className="card">
+          <p className="small muted" style={{ marginBottom: "0.25rem" }}>
+            {mine?.hasEnough
+              ? "You're covered for the rest of the circle"
+              : "You need in your wallet"}
           </p>
-          <table>
-            <thead>
-              <tr>
-                <th>Member</th>
-                <th>Allowance</th>
-                <th>Balance</th>
-                <th>Blocked</th>
-                <th>Ready</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(preview ?? []).map((status) => (
-                <tr key={status.member} data-ready={status.ready}>
-                  <td>
-                    <code>{short(status.member)}</code>
-                  </td>
-                  <td>{formatUsdc(status.allowance, decimals)}</td>
-                  <td>{formatUsdc(status.balance, decimals)}</td>
-                  <td>{isBlocked(status.member) ? "BLOCKED" : "no"}</td>
-                  <td>{status.ready ? "yes" : "NO"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <p className="hero-figure">
+            {money(iNeed, decimals)}
+            <span className="hero-unit">USDC</span>
+          </p>
+          <p className="small muted" style={{ margin: "0.5rem 0 0" }}>
+            You have {money(mine?.balance, decimals)} USDC. That figure covers
+            every round you still owe, including the small network charge.
+          </p>
+        </div>
+      )}
 
-          {rotaBlocked === true && (
-            <div role="alert" data-kind="compliance">
-              <p>
-                <strong>
-                  The Rota contract itself is blocklisted by USDC. No cycle in
-                  any circle can settle.
-                </strong>
-              </p>
-              <p>
-                Rota is the spender on every transfer, and{" "}
-                <code>transferFrom</code> refuses a blocklisted spender. This is
-                not something any member can fix by approving or topping up.
-              </p>
-              <p>
-                <small>
-                  contract: <code>{ROTA_ADDRESS}</code>
-                </small>
-              </p>
-            </div>
+      {isConnected && isMember && myTurn && started && (
+        <div className="notice notice-calm">
+          <p className="notice-title">It&rsquo;s your turn.</p>
+          <p className="small">
+            You receive {money(pot, decimals)} USDC this round, and you
+            don&rsquo;t pay in.
+          </p>
+        </div>
+      )}
+
+      {isConnected && !isMember && (
+        <div className="notice notice-wait">
+          <p className="notice-title">You&rsquo;re not in this circle.</p>
+          <p className="small">
+            You can follow along, but only the people listed can take part.
+          </p>
+        </div>
+      )}
+
+      {started && !due && !rotaBlocked && (
+        <div className="notice notice-wait">
+          <p className="notice-title">
+            Next turn: {whenInWords(circle?.nextDueAt)}
+          </p>
+          <p className="small">
+            {standings[cycleIndex]?.name ?? "The next person"} receives{" "}
+            {money(pot, decimals)} USDC then. There&rsquo;s nothing to do until
+            then.
+          </p>
+        </div>
+      )}
+
+      {!rotaBlocked && notJoined.length > 0 && (
+        <div className="notice notice-wait">
+          <p className="notice-title">
+            {notJoined.length === 1
+              ? `Waiting for ${notJoined[0].name} to join.`
+              : `Waiting for ${notJoined.length} people to join.`}
+          </p>
+          {notJoined.length > 1 && (
+            <p className="small">{nameList(notJoined.map((s) => s.name))}.</p>
           )}
-
-          {blockedMembers.length > 0 && (
-            <div role="alert" data-kind="compliance">
-              <p>
-                <strong>
-                  {blockedMembers.length} member(s) are blocklisted by USDC.
-                  Disburse is disabled.
-                </strong>
-              </p>
-              <p>
-                This is a compliance block, not a balance or allowance problem —
-                approving more or topping up will not clear it. The circle cannot
-                settle while they are members.
-              </p>
-              <ul>
-                {blockedMembers.map((member) => (
-                  <li key={member}>
-                    <a href={addressUrl(member)} target="_blank" rel="noreferrer">
-                      <code>{member}</code>
-                    </a>{" "}
-                    — blocklisted
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {shortMembers.length > 0 && (
-            <div role="alert">
-              <p>
-                <strong>
-                  {shortMembers.length} member(s) are short. Disburse is disabled
-                  until they are covered:
-                </strong>
-              </p>
-              <ul>
-                {shortMembers.map((status) => (
-                  <li key={status.member}>
-                    <code>{status.member}</code> — allowance{" "}
-                    {formatUsdc(status.allowance, decimals)}, balance{" "}
-                    {formatUsdc(status.balance, decimals)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <h2>Actions</h2>
-
-          <p>
-            <button
-              type="button"
-              disabled={!isConnected || busy || !allowanceShort || !isMember}
-              onClick={() =>
-                run("approve", () =>
-                  writeContractAsync({
-                    address: USDC_ADDRESS,
-                    abi: ERC20_ABI,
-                    functionName: "approve",
-                    args: [ROTA_ADDRESS!, requiredAllowance],
-                  }),
-                )
-              }
-            >
-              {pending === "approve" ? "Approving…" : "Approve"}
-            </button>{" "}
-            Approve {formatUsdc(requiredAllowance, decimals)} USDC — one signature
-            covering the whole rotation.
-            {!allowanceShort && isConnected && isMember && (
-              <em> Already approved.</em>
-            )}
-            {isConnected && !isMember && <em> You are not a member.</em>}
+          <p className="small">
+            The circle can&rsquo;t pay anyone until everyone has joined. Nobody
+            has been charged.
           </p>
+        </div>
+      )}
 
-          <p>
-            <button
-              type="button"
-              disabled={
-                !isConnected || busy || circle.started || !isMember || !everyoneReady
-              }
-              onClick={() =>
-                run("start", () =>
-                  writeContractAsync({
-                    address: ROTA_ADDRESS!,
-                    abi: ROTA_ABI,
-                    functionName: "start",
-                    args: [circleId],
-                  }),
-                )
-              }
-            >
-              {pending === "start" ? "Starting…" : "Start"}
-            </button>{" "}
-            {circle.started ? (
-              <em>Already started.</em>
-            ) : everyoneReady ? (
-              "Every member has approved. Any member can start."
-            ) : (
-              "Waiting for every member to approve."
-            )}
+      {!rotaBlocked && notFunded.length > 0 && (
+        <div className="notice notice-wait">
+          <p className="notice-title">
+            {notFunded.length === 1
+              ? `${notFunded[0].name} hasn't got enough in their wallet yet.`
+              : `${notFunded.length} people haven't got enough in their wallet yet.`}
           </p>
-
-          <p>
-            <button
-              type="button"
-              disabled={
-                !isConnected || busy || !circle.started || complete || !due || !everyoneReady
-              }
-              onClick={() =>
-                run("disburse", () =>
-                  writeContractAsync({
-                    address: ROTA_ADDRESS!,
-                    abi: ROTA_ABI,
-                    functionName: "disburse",
-                    args: [circleId],
-                  }),
-                )
-              }
-            >
-              {pending === "disburse" ? "Disbursing…" : "Disburse"}
-            </button>{" "}
-            {complete ? (
-              <em>Circle complete.</em>
-            ) : !circle.started ? (
-              <em>Not started yet.</em>
-            ) : !due ? (
-              <em>Not due until {formatTimestamp(circle.nextDueAt)}.</em>
-            ) : !everyoneReady ? (
-              <em>Disabled: a member is short (named above).</em>
-            ) : (
-              "Due now — anyone can settle this cycle."
-            )}
-          </p>
-
-          <ErrorNotice failure={failure ?? networkFailure} />
-
-          {lastHash && (
-            <p>
-              Last transaction:{" "}
-              <a href={txUrl(lastHash)} target="_blank" rel="noreferrer">
-                <code>{lastHash}</code>
-              </a>
+          {notFunded.length === 1 ? (
+            <p className="small">
+              {notFunded[0].name} needs {money(notFunded[0].needed, decimals)}{" "}
+              USDC and has {money(notFunded[0].balance, decimals)} USDC.
+            </p>
+          ) : (
+            <p className="small">
+              {nameList(notFunded.map((s) => s.name))}. Each needs{" "}
+              {money(notFunded[0].needed, decimals)} USDC. They&rsquo;re marked
+              below.
             </p>
           )}
-        </>
+        </div>
       )}
+
+      <ErrorNotice failure={failure ?? networkFailure} />
+
+      {action && (
+        <div style={{ margin: "2rem 0" }}>
+          {action}
+          {actionNote && <p className="action-note">{actionNote}</p>}
+        </div>
+      )}
+
+      {peopleList}
+
+      <hr className="divider" />
+      <Link
+        href={`/proof/${id}`}
+        className="btn btn-secondary"
+        style={{ textDecoration: "none" }}
+      >
+        See the full record
+      </Link>
+      <p className="action-note">
+        Anyone can check this circle without signing in.
+      </p>
     </main>
   );
 }

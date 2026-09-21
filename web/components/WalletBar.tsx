@@ -2,13 +2,14 @@
 
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 
+import { shortAddress } from "@/lib/format";
 import { EXPECTED_CHAIN_ID } from "@/lib/wagmi";
 
 /**
- * Connect / disconnect, plus the wrong-network state. Kept deliberately plain:
- * this is the functional pass.
+ * Connecting is plumbing, not the point of any screen, so it stays quiet
+ * until it needs attention — then it becomes the one thing to do.
  */
-export function WalletBar() {
+export function WalletBar({ reason }: { reason?: string }) {
   const { address, chainId, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -16,46 +17,60 @@ export function WalletBar() {
 
   const wrongNetwork = isConnected && chainId !== EXPECTED_CHAIN_ID;
 
-  return (
-    <div>
-      <hr />
-      {isConnected ? (
-        <p>
-          Connected: <code>{address}</code>{" "}
-          <button type="button" onClick={() => disconnect()}>
-            Disconnect
-          </button>
+  if (!isConnected) {
+    return (
+      <div className="card card-quiet">
+        <p style={{ marginBottom: "1rem" }}>
+          {reason ?? "Connect your wallet to see your circle."}
         </p>
-      ) : (
-        <p>
-          {connectors.map((connector) => (
+        {connectors.length === 0 ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            No wallet found on this device. Install one, then reload this page.
+          </p>
+        ) : (
+          connectors.map((connector) => (
             <button
               key={connector.uid}
               type="button"
+              className="btn"
               disabled={isPending}
               onClick={() => connect({ connector })}
             >
-              Connect {connector.name}
+              {isPending ? "Connecting…" : "Connect wallet"}
             </button>
-          ))}
-          {connectors.length === 0 && <em>No wallet connector detected.</em>}
-        </p>
-      )}
+          ))
+        )}
+      </div>
+    );
+  }
 
+  return (
+    <>
       {wrongNetwork && (
-        <p role="alert">
-          <strong>Wrong network.</strong> Your wallet is on chain {chainId}. Rota
-          runs on Arc testnet (chain {EXPECTED_CHAIN_ID}).{" "}
+        <div className="notice notice-wait">
+          <p className="notice-title">Your wallet is on the wrong network.</p>
+          <p>Switch it to Arc to carry on.</p>
           <button
             type="button"
+            className="btn"
             disabled={isSwitching}
             onClick={() => switchChain({ chainId: EXPECTED_CHAIN_ID })}
           >
-            {isSwitching ? "Switching…" : "Switch to Arc testnet"}
+            {isSwitching ? "Switching…" : "Switch to Arc"}
           </button>
-        </p>
+        </div>
       )}
-      <hr />
-    </div>
+
+      <p className="small muted" style={{ marginBottom: "1.5rem" }}>
+        Signed in as {address ? shortAddress(address) : ""}{" "}
+        <button
+          type="button"
+          className="btn-link"
+          onClick={() => disconnect()}
+        >
+          Sign out
+        </button>
+      </p>
+    </>
   );
 }

@@ -2,29 +2,23 @@
 
 import type { TxFailure } from "@/lib/errors";
 
+const toneClass = {
+  calm: "notice notice-calm",
+  wait: "notice notice-wait",
+  stop: "notice notice-stop",
+} as const;
+
 /**
- * Renders a classified failure. The raw contract error name / revert string is
- * shown on purpose during this functional pass so failures stay diagnosable.
+ * A failure, said once, in a sentence. No error names, no revert strings, no
+ * addresses — the functional pass surfaced those; this one does not.
  */
 export function ErrorNotice({ failure }: { failure: TxFailure | undefined }) {
   if (!failure) return null;
 
   return (
-    <div role="alert" data-kind={failure.kind}>
-      <p>
-        <strong>{failure.title}</strong>
-      </p>
-      {failure.detail && <p>{failure.detail}</p>}
-      <p>
-        <small>
-          kind: <code>{failure.kind}</code>
-          {failure.raw && (
-            <>
-              {" · "}on-chain error: <code>{failure.raw}</code>
-            </>
-          )}
-        </small>
-      </p>
+    <div className={toneClass[failure.tone]} role="alert">
+      <p className="notice-title">{failure.title}</p>
+      {failure.detail && <p className="small">{failure.detail}</p>}
     </div>
   );
 }

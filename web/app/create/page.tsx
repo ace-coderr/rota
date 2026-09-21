@@ -3,115 +3,150 @@
 import Link from "next/link";
 import { useState } from "react";
 import { isAddress, parseUnits, type Address } from "viem";
-import {
-  useAccount,
-  useWaitForTransactionReceipt,
-  useWriteContract,
-  usePublicClient,
-} from "wagmi";
+import { useAccount, usePublicClient, useWriteContract } from "wagmi";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { WalletBar } from "@/components/WalletBar";
-import { classifyTxError, wrongNetworkFailure, type TxFailure } from "@/lib/errors";
+import {
+  classifyTxError,
+  wrongNetworkFailure,
+  type TxFailure,
+} from "@/lib/errors";
 import { ROTA_ABI, ROTA_ADDRESS } from "@/lib/rota";
 import { useUsdcDecimals } from "@/lib/useRota";
 import { EXPECTED_CHAIN_ID } from "@/lib/wagmi";
-import { txUrl } from "@/lib/explorer";
+
+const FREQUENCIES = [
+  { label: "Every week", seconds: "604800" },
+  { label: "Every two weeks", seconds: "1209600" },
+  { label: "Every month", seconds: "2592000" },
+];
 
 export default function CreatePage() {
   const { isConnected, chainId } = useAccount();
   const publicClient = usePublicClient();
   const { data: decimals } = useUsdcDecimals();
+  const { writeContractAsync } = useWriteContract();
 
-  const [amount, setAmount] = useState("10");
-  const [period, setPeriod] = useState("3600");
+  const [amount, setAmount] = useState("");
+  const [period, setPeriod] = useState(FREQUENCIES[0].seconds);
   const [membersText, setMembersText] = useState("");
-
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [circleId, setCircleId] = useState<bigint | undefined>();
-
-  const { writeContractAsync, isPending } = useWriteContract();
-  const [hash, setHash] = useState<`0x${string}` | undefined>();
-  const receipt = useWaitForTransactionReceipt({ hash });
+  const [working, setWorking] = useState(false);
 
   const members = membersText
     .split(/[\s,]+/)
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const invalidAddresses = members.filter((m) => !isAddress(m));
-  const duplicates = members.filter(
-    (m, i) => members.findIndex((o) => o.toLowerCase() === m.toLowerCase()) !== i,
-  );
+  const invalid = members.filter((m) => !isAddress(m));
+  const duplicates = [
+    ...new Set(
+      members.filter(
+        (m, i) =>
+          members.findIndex((o) => o.toLowerCase() === m.toLowerCase()) !== i,
+      ),
+    ),
+  ];
 
-  const amountValid = /^\d+(\.\d+)?$/.test(amount.trim()) && Number(amount) > 0;
-  const periodValid = /^\d+$/.test(period.trim()) && Number(period) > 0;
+  const amountValid = /^\d+(\.\d{1,6})?$/.test(amount.trim()) && Number(amount) > 0;
+  const touched = membersText.trim() !== "";
 
   const problems: string[] = [];
-  if (!amountValid) problems.push("Amount must be a positive number.");
-  if (!periodValid) problems.push("Period must be a positive whole number of seconds.");
-  if (members.length < 2) problems.push("A circle needs at least 2 members.");
-  if (members.length > 20) problems.push(`A circle can have at most 20 members (you entered ${members.length}).`);
-  if (invalidAddresses.length) problems.push(`Not valid addresses: ${invalidAddresses.join(", ")}`);
-  if (duplicates.length) problems.push(`Duplicate members: ${[...new Set(duplicates)].join(", ")}`);
+  if (touched && members.length < 2) {
+    problems.push("A circle needs at least two people.");
+  }
+  if (members.length > 20) {
+    problems.push(`A circle can have up to 20 people. You've listed ${members.length}.`);
+  }
+  if (invalid.length) {
+    problems.push(
+      `${invalid.length} of these isn't a valid wallet address. Each one starts with 0x and is 42 characters long.`,
+    );
+  }
+  if (duplicates.length) {
+    problems.push("Someone is listed twice. Each person can only appear once.");
+  }
 
   const networkFailure = wrongNetworkFailure(chainId, EXPECTED_CHAIN_ID);
-  const canSubmit =
+  const ready =
     isConnected &&
     !networkFailure &&
+    amountValid &&
+    members.length >= 2 &&
     problems.length === 0 &&
     decimals !== undefined &&
-    ROTA_ADDRESS &&
-    !isPending &&
-    !receipt.isLoading;
+    Boolean(ROTA_ADDRESS) &&
+    !working;
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setFailure(undefined);
-    setCircleId(undefined);
-    setHash(undefined);
 
     const rota = ROTA_ADDRESS;
     if (!rota || decimals === undefined) return;
-    if (networkFailure) {
-      setFailure(networkFailure);
-      return;
-    }
+    if (networkFailure) return setFailure(networkFailure);
 
+    setWorking(true);
     try {
-      const contribution = parseUnits(amount.trim(), decimals);
-
-      const txHash = await writeContractAsync({
+      const hash = await writeContractAsync({
         address: rota,
         abi: ROTA_ABI,
         functionName: "createCircle",
-        args: [members as Address[], contribution, BigInt(period.trim())],
+        args: [members as Address[], parseUnits(amount.trim(), decimals), BigInt(period)],
       });
-      setHash(txHash);
 
-      // The id is the return value, which a transaction cannot give us, so
-      // read it out of the CircleCreated event instead.
-      const confirmed = await publicClient!.waitForTransactionReceipt({
-        hash: txHash,
-      });
-      const log = confirmed.logs.find(
+      const receipt = await publicClient!.waitForTransactionReceipt({ hash });
+      const log = receipt.logs.find(
         (l) => l.address.toLowerCase() === rota.toLowerCase(),
       );
-      if (log && log.topics[1]) {
-        setCircleId(BigInt(log.topics[1]));
-      }
+      if (log?.topics[1]) setCircleId(BigInt(log.topics[1]));
     } catch (error) {
       setFailure(classifyTxError(error));
+    } finally {
+      setWorking(false);
     }
   }
 
   if (!ROTA_ADDRESS) {
     return (
       <main>
-        <h1>Create a circle</h1>
-        <p role="alert">
-          <strong>Not configured.</strong> Set <code>NEXT_PUBLIC_ROTA_ADDRESS</code>{" "}
-          in <code>web/.env.local</code> to the deployed Rota address.
+        <h1>Start a circle</h1>
+        <div className="notice notice-stop">
+          <p className="notice-title">Rota isn&rsquo;t set up on this site yet.</p>
+          <p className="small">Please try again later.</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (circleId !== undefined) {
+    return (
+      <main>
+        <h1>Your circle is ready</h1>
+        <p className="lede">
+          Share this number with everyone joining. They&rsquo;ll need it to find
+          the circle.
+        </p>
+
+        <div className="card" style={{ textAlign: "center", padding: "2rem 1.25rem" }}>
+          <p className="small muted" style={{ marginBottom: "0.25rem" }}>
+            Circle number
+          </p>
+          <p className="hero-figure">{circleId.toString()}</p>
+        </div>
+
+        <Link
+          href={`/circle/${circleId}`}
+          className="btn"
+          style={{ textDecoration: "none" }}
+        >
+          Open my circle
+        </Link>
+        <p className="action-note">
+          Nothing has been charged. Nobody pays anything until everyone has
+          joined and the circle starts.
         </p>
       </main>
     );
@@ -119,96 +154,96 @@ export default function CreatePage() {
 
   return (
     <main>
-      <h1>Create a circle</h1>
-      <p>
-        <Link href="/">Home</Link>
+      <Link href="/" className="back">
+        ← Back
+      </Link>
+      <h1>Start a circle</h1>
+      <p className="lede">
+        Everyone puts in the same amount each round, and takes it in turns to
+        receive the pot.
       </p>
 
-      <WalletBar />
+      <WalletBar reason="Connect your wallet to set up a circle." />
 
       <form onSubmit={onSubmit}>
-        <p>
-          <label htmlFor="amount">Amount per person, per cycle (USDC)</label>
-          <br />
+        <div className="field">
+          <label htmlFor="amount">How much does each person put in?</label>
           <input
             id="amount"
+            inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
+            placeholder="50.00"
+            aria-describedby="amount-hint"
           />
-        </p>
+          <p className="hint" id="amount-hint">
+            In USDC, each round.
+            {amount.trim() !== "" && !amountValid && (
+              <> Enter an amount like 50 or 50.00.</>
+            )}
+          </p>
+        </div>
 
-        <p>
-          <label htmlFor="period">Period (seconds between cycles)</label>
-          <br />
-          <input
+        <div className="field">
+          <label htmlFor="period">How often?</label>
+          <select
             id="period"
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-          />
-          <br />
-          <small>3600 = hourly, 86400 = daily, 604800 = weekly.</small>
-        </p>
+          >
+            {FREQUENCIES.map((f) => (
+              <option key={f.seconds} value={f.seconds}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <p>
-          <label htmlFor="members">
-            Member addresses, in payout order (one per line)
-          </label>
-          <br />
+        <div className="field">
+          <label htmlFor="members">Who&rsquo;s in the circle?</label>
           <textarea
             id="members"
-            rows={6}
-            cols={60}
             value={membersText}
             onChange={(e) => setMembersText(e.target.value)}
             placeholder={"0x…\n0x…\n0x…"}
+            aria-describedby="members-hint"
           />
-          <br />
-          <small>
-            {members.length} address(es). Member 1 is paid first, then member 2,
-            and so on.
-          </small>
-        </p>
+          <p className="hint" id="members-hint">
+            One wallet address per line, in the order people will be paid. The
+            first person listed is paid first.
+            {members.length > 0 && (
+              <>
+                {" "}
+                <strong>
+                  {members.length} {members.length === 1 ? "person" : "people"}{" "}
+                  so far.
+                </strong>
+              </>
+            )}
+          </p>
+        </div>
 
-        {problems.length > 0 && membersText.trim() !== "" && (
-          <ul role="alert">
+        {touched && problems.length > 0 && (
+          <div className="notice notice-wait" role="alert">
             {problems.map((problem) => (
-              <li key={problem}>{problem}</li>
+              <p key={problem} className="small">
+                {problem}
+              </p>
             ))}
-          </ul>
+          </div>
         )}
 
-        <button type="submit" disabled={!canSubmit}>
-          {isPending
-            ? "Confirm in wallet…"
-            : receipt.isLoading
-              ? "Creating…"
-              : "Create circle"}
+        <button type="submit" className="btn" disabled={!ready}>
+          {working ? "Creating your circle…" : "Create this circle"}
         </button>
-        {!isConnected && <span> Connect a wallet first.</span>}
+        <p className="action-note">
+          {!isConnected
+            ? "Connect your wallet first."
+            : "This just sets up the circle. No money moves, and nobody is charged."}
+        </p>
       </form>
 
       <ErrorNotice failure={failure ?? networkFailure} />
-
-      {hash && (
-        <p>
-          Transaction: <a href={txUrl(hash)} target="_blank" rel="noreferrer">
-            <code>{hash}</code>
-          </a>
-        </p>
-      )}
-
-      {circleId !== undefined && (
-        <div>
-          <h2>Circle created</h2>
-          <p>
-            Circle id: <strong><code>{circleId.toString()}</code></strong>
-          </p>
-          <p>
-            <Link href={`/circle/${circleId}`}>Open the circle</Link> — share this
-            id with the other members so they can approve.
-          </p>
-        </div>
-      )}
     </main>
   );
 }

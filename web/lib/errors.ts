@@ -2,78 +2,78 @@ import {
   BaseError,
   ContractFunctionRevertedError,
   UserRejectedRequestError,
+  type Address,
 } from "viem";
 
+import { nameList, whenInWords } from "./format";
+
 /**
- * Distinct failure modes we want the UI to name, rather than showing one
- * generic "transaction failed".
+ * Every way this can fail, turned into something a person can act on.
+ *
+ * No error name, no revert string and no address reaches the screen. Where the
+ * chain tells us who is involved, we say their name; where it does not, the
+ * caller passes in who the app already knows is short.
  */
 export type TxFailureKind =
-  | "user-rejected"
+  | "user-declined"
   | "wrong-network"
-  | "insufficient-allowance"
-  | "insufficient-balance"
-  | "compliance"
-  | "not-due"
-  | "circle-complete"
-  | "too-many-members"
-  | "contract-error"
-  | "unknown";
+  | "short-share"
+  | "no-permission"
+  | "blocked"
+  | "too-early"
+  | "finished"
+  | "too-many-people"
+  | "other";
 
 export type TxFailure = {
   kind: TxFailureKind;
-  /** Short sentence for the user. */
   title: string;
-  /** What to do about it, when there is something to do. */
   detail?: string;
-  /**
-   * The raw on-chain error name or revert string. Surfaced deliberately during
-   * this functional pass so failures are diagnosable.
-   */
-  raw?: string;
+  /** Calm cases get a neutral tone; only real stops get the alarming one. */
+  tone: "calm" | "wait" | "stop";
+};
+
+export type FailureContext = {
+  /** Names the app already believes are short, in order. */
+  shortNames?: string[];
+  /** Resolves an address the chain named back to a person. */
+  nameOf?: (member: Address) => string;
 };
 
 /**
- * Arc's USDC is Circle's NativeFiatTokenV2_2 behind FiatTokenProxy. Its
- * transferFrom is guarded by `whenNotPaused` and `notBlacklisted(msg.sender)`
- * — the spender, which for us is the Rota contract. from/to compliance is not
- * a modifier here: _transfer hands the movement to the native coin authority,
- * and a refusal there surfaces as "Native transfer failed".
- *
- * All of these are protocol-level refusals: they fire regardless of balance or
- * allowance, and must not be reported as an ordinary failure.
+ * Arc's USDC is Circle's NativeFiatTokenV2_2. transferFrom is guarded by
+ * whenNotPaused and notBlacklisted(msg.sender); from/to compliance is enforced
+ * by the native coin authority and comes back as "Native transfer failed".
+ * These are refusals by the money itself, not something anyone here can fix.
  */
-const COMPLIANCE_REVERTS = [
+const COMPLIANCE = [
   "Blacklistable: account is blacklisted",
   "FiatTokenV2_2: Account is blacklisted",
   "Pausable: paused",
-  // NativeFiatTokenV2_2._transfer delegates the actual movement to the chain's
-  // native coin authority. When that refuses — which is where from/to
-  // compliance is enforced — this is the string that comes back.
   "Native transfer failed",
 ];
 
-/**
- * The same token reverts with plain strings for the ordinary ERC-20 failures,
- * not with OpenZeppelin v5 custom errors. Both spellings are matched so the
- * app behaves the same against Arc USDC and against an OZ-based mock.
- */
-const ALLOWANCE_REVERTS = [
+/** The same token reverts with strings, not OpenZeppelin v5 custom errors. */
+const NO_PERMISSION = [
   "ERC20: transfer amount exceeds allowance",
   "ERC20InsufficientAllowance",
 ];
 
-const BALANCE_REVERTS = [
+const SHORT_SHARE = [
   "ERC20: transfer amount exceeds balance",
   "ERC20InsufficientBalance",
 ];
 
-function matches(haystack: string, needles: string[]): string | undefined {
-  return needles.find((needle) => haystack.includes(needle));
-}
+const matches = (haystack: string, needles: string[]) =>
+  needles.some((needle) => haystack.includes(needle));
 
-/** Pulls the revert name/reason out of whatever viem threw. */
-function revertSignal(error: unknown): { name?: string; text: string } {
+const verb = (names: string[]) => (names.length === 1 ? "hasn't" : "haven't");
+
+function revertInfo(error: unknown): {
+  name?: string;
+  args?: readonly unknown[];
+  text: string;
+} {
   const text =
     error instanceof BaseError
       ? `${error.shortMessage}\n${error.details ?? ""}\n${error.metaMessages?.join("\n") ?? ""}`
@@ -85,115 +85,176 @@ function revertSignal(error: unknown): { name?: string; text: string } {
     ) as ContractFunctionRevertedError | null;
 
     if (reverted) {
-      const name = reverted.data?.errorName ?? reverted.reason ?? undefined;
-      return { name, text: `${text}\n${name ?? ""}` };
+      return {
+        name: reverted.data?.errorName ?? reverted.reason ?? undefined,
+        args: reverted.data?.args,
+        text: `${text}\n${reverted.data?.errorName ?? reverted.reason ?? ""}`,
+      };
     }
   }
 
   return { text };
 }
 
-export function classifyTxError(error: unknown): TxFailure {
-  if (!error) return { kind: "unknown", title: "Something went wrong." };
+export function classifyTxError(
+  error: unknown,
+  context: FailureContext = {},
+): TxFailure {
+  const shortNames = context.shortNames ?? [];
 
-  // Wallet-level rejection, before anything reaches the chain.
+  if (!error) {
+    return {
+      kind: "other",
+      tone: "stop",
+      title: "That didn't go through.",
+      detail: "Nothing has moved. Please try again.",
+    };
+  }
+
   if (
     error instanceof BaseError &&
     error.walk((e) => e instanceof UserRejectedRequestError)
   ) {
     return {
-      kind: "user-rejected",
-      title: "You rejected the request in your wallet.",
+      kind: "user-declined",
+      tone: "calm",
+      title: "You cancelled it.",
       detail: "Nothing was sent and nothing was charged.",
     };
   }
 
-  const { name, text } = revertSignal(error);
+  const { name, args, text } = revertInfo(error);
   const haystack = `${name ?? ""}\n${text}`;
 
-  const compliance = matches(haystack, COMPLIANCE_REVERTS);
-  if (compliance) {
+  if (matches(haystack, COMPLIANCE)) {
     return {
-      kind: "compliance",
-      title: "USDC refused this transfer on compliance grounds.",
+      kind: "blocked",
+      tone: "stop",
+      title: "The money couldn't be moved.",
       detail:
-        "This is not a balance or allowance problem — Arc's USDC blocked the " +
-        "transfer itself. An address involved may be blacklisted, or the token " +
-        "may be paused. Nothing you can change in this app will clear it.",
-      raw: compliance,
+        "USDC itself declined this, so it isn't something anyone in the " +
+        "circle can fix by adding funds. Everyone's money is untouched. " +
+        "Please contact support before trying again.",
     };
   }
 
-  const allowance = matches(haystack, ALLOWANCE_REVERTS);
-  if (allowance) {
+  if (matches(haystack, NO_PERMISSION)) {
     return {
-      kind: "insufficient-allowance",
-      title: "A member has not approved enough USDC.",
-      detail: "Each member must approve the full rotation before it can settle.",
-      raw: allowance,
+      kind: "no-permission",
+      tone: "wait",
+      title: `${nameList(shortNames)} ${verb(shortNames)} joined yet.`,
+      detail:
+        "Everyone has to join before the circle can pay anyone. Nobody has " +
+        "been charged.",
     };
   }
 
-  const balance = matches(haystack, BALANCE_REVERTS);
-  if (balance) {
+  if (matches(haystack, SHORT_SHARE)) {
     return {
-      kind: "insufficient-balance",
-      title: "A member does not hold enough USDC.",
-      detail: "Top up the short member's wallet, then try again.",
-      raw: balance,
+      kind: "short-share",
+      tone: "wait",
+      title: `${nameList(shortNames)} ${verb(shortNames)} got enough in their wallet.`,
+      detail:
+        "Once they top up, this will go through. Nobody has been charged.",
     };
   }
 
   switch (name) {
-    case "NotDue":
+    case "InsufficientAllowanceToStart": {
+      // This one names the person on-chain.
+      const who =
+        context.nameOf && args?.[0]
+          ? context.nameOf(args[0] as Address)
+          : nameList(shortNames);
       return {
-        kind: "not-due",
-        title: "This cycle is not due yet.",
-        detail: "Wait until the next due date before disbursing.",
-        raw: "NotDue",
+        kind: "no-permission",
+        tone: "wait",
+        title: `${who} hasn't joined yet.`,
+        detail: "Everyone has to join before the circle can start.",
       };
+    }
+    case "NotDue": {
+      const due = args?.[1] ? whenInWords(BigInt(args[1] as bigint)) : undefined;
+      return {
+        kind: "too-early",
+        tone: "wait",
+        title: due ? `It's not time yet — next is ${due}.` : "It's not time yet.",
+        detail: "Come back then and this will be ready.",
+      };
+    }
     case "CircleComplete":
       return {
-        kind: "circle-complete",
-        title: "This circle has already completed.",
-        detail: "Every member has been paid once. There is nothing left to settle.",
-        raw: "CircleComplete",
+        kind: "finished",
+        tone: "calm",
+        title: "This circle has finished.",
+        detail: "Everyone has had their turn. There's nothing left to pay.",
       };
     case "TooManyMembers":
       return {
-        kind: "too-many-members",
-        title: "Too many members.",
-        detail: "A circle can have at most 20 members.",
-        raw: "TooManyMembers",
+        kind: "too-many-people",
+        tone: "wait",
+        title: "That's too many people for one circle.",
+        detail: "A circle can have up to 20 people.",
+      };
+    case "AlreadyStarted":
+      return {
+        kind: "other",
+        tone: "calm",
+        title: "This circle has already started.",
+      };
+    case "NotAMember":
+      return {
+        kind: "other",
+        tone: "wait",
+        title: "You're not part of this circle.",
+        detail: "Only the people in a circle can start it.",
+      };
+    case "DuplicateMember":
+      return {
+        kind: "other",
+        tone: "wait",
+        title: "Someone is listed twice.",
+        detail: "Each person can only appear once in a circle.",
+      };
+    case "ZeroAddressMember":
+      return {
+        kind: "other",
+        tone: "wait",
+        title: "One of the wallet addresses isn't valid.",
+      };
+    case "TooFewMembers":
+      return {
+        kind: "other",
+        tone: "wait",
+        title: "A circle needs at least two people.",
       };
   }
 
-  if (name) {
-    // A Rota error we know by name but have no bespoke copy for.
+  if (haystack.includes("SafeERC20FailedOperation")) {
     return {
-      kind: "contract-error",
-      title: `The contract rejected this: ${name}`,
-      raw: name,
+      kind: "blocked",
+      tone: "stop",
+      title: "The money couldn't be moved.",
+      detail:
+        "USDC declined this without saying why. Everyone's money is " +
+        "untouched. Please contact support before trying again.",
     };
   }
 
-  // SafeERC20 reports a token that failed without a reason. On Arc that most
-  // likely means the token refused the transfer, so do not bury it as generic.
-  if (haystack.includes("SafeERC20FailedOperation")) {
+  if (/insufficient funds/i.test(haystack)) {
     return {
-      kind: "compliance",
-      title: "USDC rejected the transfer without giving a reason.",
-      detail:
-        "The token refused the operation. On Arc this is usually a " +
-        "protocol-level compliance block rather than a balance or allowance problem.",
-      raw: "SafeERC20FailedOperation",
+      kind: "short-share",
+      tone: "wait",
+      title: "There isn't enough in your wallet to cover this.",
+      detail: "Top up and try again. Nothing has been charged.",
     };
   }
 
   return {
-    kind: "unknown",
-    title: "The transaction failed.",
-    raw: text.split("\n").find((line) => line.trim().length > 0)?.trim(),
+    kind: "other",
+    tone: "stop",
+    title: "That didn't go through.",
+    detail: "Nothing has moved. Please try again in a moment.",
   };
 }
 
@@ -201,11 +262,13 @@ export function wrongNetworkFailure(
   connectedChainId: number | undefined,
   expectedChainId: number,
 ): TxFailure | undefined {
-  if (connectedChainId === undefined) return undefined;
-  if (connectedChainId === expectedChainId) return undefined;
+  if (connectedChainId === undefined || connectedChainId === expectedChainId) {
+    return undefined;
+  }
   return {
     kind: "wrong-network",
-    title: `Wrong network: your wallet is on chain ${connectedChainId}.`,
-    detail: `Rota runs on Arc testnet (chain ${expectedChainId}). Switch networks to continue.`,
+    tone: "wait",
+    title: "Your wallet is on the wrong network.",
+    detail: "Switch it to Arc to carry on.",
   };
 }
