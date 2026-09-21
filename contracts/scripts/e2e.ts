@@ -26,8 +26,17 @@ import { ERC20_ABI, NATIVE_COIN_AUTHORITY, USDC_ADDRESS } from "../lib/usdc.js";
 const ROTA_ADDRESS = process.env.ROTA_ADDRESS as Address | undefined;
 if (!ROTA_ADDRESS) throw new Error("Set ROTA_ADDRESS to the deployed contract.");
 
-const PERIOD = 60n; // one minute, so a 3-cycle run finishes in a few minutes
-const CONTRIBUTION_WHOLE = "0.10"; // USDC per member per cycle
+const PERIOD = 60n; // one minute, so a run finishes in a few minutes
+
+/**
+ * Size and shape of the run, so the same script can do a full 3-member
+ * rotation or a single cycle of a 20-member circle for a gas measurement.
+ *
+ *   E2E_MEMBERS=20 E2E_CYCLES=1 E2E_CONTRIBUTION=0.01
+ */
+const MEMBER_COUNT = Number(process.env.E2E_MEMBERS ?? 3);
+const CYCLES = Number(process.env.E2E_CYCLES ?? MEMBER_COUNT);
+const CONTRIBUTION_WHOLE = process.env.E2E_CONTRIBUTION ?? "0.10";
 /**
  * On Arc, USDC *is* the native coin: balanceOf() is the native balance
  * truncated from 18 decimals to 6. So gas and contributions are spent from the
@@ -56,16 +65,17 @@ function derive(index: number): Hex {
 
 const chain = deployerWallet.chain;
 const member1 = deployerWallet;
-const keys = [derive(1), derive(2)];
-const members234 = keys.map((key) =>
+// Members 2..n are derived from the deployer key, so a re-run reuses the same
+// addresses instead of stranding funds in fresh throwaway accounts.
+const derivedMembers = Array.from({ length: MEMBER_COUNT - 1 }, (_, i) =>
   createWalletClient({
-    account: privateKeyToAccount(key),
+    account: privateKeyToAccount(derive(i + 1)),
     chain,
     transport: http(),
   }),
 );
 
-const wallets = [member1, ...members234];
+const wallets = [member1, ...derivedMembers];
 const addresses = wallets.map((w) => w.account!.address as Address);
 
 const decimals = Number(
@@ -99,18 +109,22 @@ console.log(`network: ${networkName}`);
 console.log(`rota:    ${ROTA_ADDRESS}`);
 console.log(`usdc:    ${USDC_ADDRESS} (${decimals} decimals)`);
 console.log("");
-console.log("members:");
+console.log(`members: ${MEMBER_COUNT}, cycles: ${CYCLES}, contribution: ${CONTRIBUTION_WHOLE} USDC`);
 for (const [i, a] of addresses.entries()) {
   console.log(`  ${i + 1}. ${a}  ${fmt(await usdcOf(a))}`);
 }
 
 const rota = await viem.getContractAt("Rota", ROTA_ADDRESS);
 
-// ---------------------------------------------------------------- fund 2 & 3
-console.log("\n=== funding members 2 and 3 ===");
-const TARGET = FULL_ROTATION + parseUnits(GAS_BUFFER_6DP, decimals);
+// --------------------------------------------------------------- fund members
+console.log("\n=== funding members 2..${MEMBER_COUNT} ===");
+// A member pays `contribution` once per cycle they are not the recipient, so
+// `contribution * cycles` covers the worst case for the cycles we will run —
+// not the full rotation, which only matters for the allowance.
+const TARGET =
+  CONTRIBUTION * BigInt(CYCLES) + parseUnits(GAS_BUFFER_6DP, decimals);
 
-for (const wallet of members234) {
+for (const wallet of derivedMembers) {
   const who = wallet.account!.address as Address;
   const held = await usdcOf(who);
 
@@ -122,7 +136,7 @@ for (const wallet of members234) {
       functionName: "transfer",
       args: [who, TARGET - held],
     });
-    await send(`fund ${who} to ${fmt(TARGET)} (rotation + gas)`, hash);
+    await send(`fund ${who} to ${fmt(TARGET)} (cycles + gas)`, hash);
   } else {
     console.log(`  ${who}: already funded (${fmt(held)})`);
   }
@@ -165,13 +179,15 @@ const startHash = await member1.writeContract({
   functionName: "start",
   args: [circleId],
 });
-await send("start", startHash);
+const startReceipt = await send("start", startHash);
 
 const opening = await Promise.all(addresses.map(usdcOf));
 
 // ------------------------------------------------------------------ disburse
 console.log("\n=== disburse ===");
-for (let cycle = 0; cycle < addresses.length; cycle++) {
+const gasPerDisburse: bigint[] = [];
+
+for (let cycle = 0; cycle < CYCLES; cycle++) {
   const state = (await rota.read.getCircle([circleId])) as [
     bigint, bigint, bigint, number, boolean, bigint,
   ];
@@ -195,6 +211,11 @@ for (let cycle = 0; cycle < addresses.length; cycle++) {
   const receipt = await send(
     `disburse cycle ${cycle} -> ${addresses[cycle]}`,
     hash,
+  );
+
+  gasPerDisburse.push(receipt.gasUsed);
+  console.log(
+    `    gas used: ${receipt.gasUsed} @ ${Number(receipt.effectiveGasPrice) / 1e9} gwei`,
   );
 
   const heldByRota = await usdcOf(ROTA_ADDRESS);
@@ -256,6 +277,16 @@ for (const [i, who] of addresses.entries()) {
   );
 }
 console.log(`  complete: ${await rota.read.isComplete([circleId])}`);
+
+console.log("");
+console.log("=== gas ===");
+console.log(`  members:              ${MEMBER_COUNT}`);
+console.log(`  transfers per cycle:  ${MEMBER_COUNT - 1}`);
+console.log(`  createCircle:         ${createReceipt.gasUsed}`);
+console.log(`  start:                ${startReceipt.gasUsed}`);
+gasPerDisburse.forEach((g, i) =>
+  console.log(`  disburse cycle ${i}:     ${g}`),
+);
 console.log(`  rota's usdc: ${fmt(await usdcOf(ROTA_ADDRESS))}`);
 console.log(`\n  circle page: /circle/${circleId}`);
 console.log(`  proof page:  /proof/${circleId}`);
