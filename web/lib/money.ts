@@ -80,3 +80,43 @@ export function permissionNeeded(
     BigInt(paymentsRemaining(memberIndex, cycleIndex, memberCount))
   );
 }
+
+/* ------------------------------------------------------------------------ *
+ * Per-round checks: exactly what the contract will test for the next action.
+ *
+ * The group view uses these, not the whole-circle total. Judging everyone
+ * against their full remaining obligation flags people the contract would
+ * happily settle with, and it puts one member's future finances in front of
+ * the others — which is nobody else's business.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What this person must have signed over for the next action to succeed.
+ *
+ * Before the circle starts that action is start(), which checks every member
+ * for a full rotation's worth. Once it is running the action is disburse(),
+ * which needs one contribution from each payer and nothing from the person
+ * being paid.
+ */
+export function permissionForRound(
+  contribution: bigint,
+  memberIndex: number,
+  cycleIndex: number,
+  memberCount: number,
+  started: boolean,
+): bigint {
+  if (!started) return contribution * BigInt(Math.max(0, memberCount - 1));
+  return memberIndex === cycleIndex ? 0n : contribution;
+}
+
+/**
+ * What this person must be holding for the next round to settle. The person
+ * whose turn it is pays nothing, so they need nothing.
+ */
+export function balanceForRound(
+  contribution: bigint,
+  memberIndex: number,
+  cycleIndex: number,
+): bigint {
+  return memberIndex === cycleIndex ? 0n : contribution;
+}

@@ -26,7 +26,13 @@ import {
   shortAddress,
   whenInWords,
 } from "@/lib/format";
-import { feeBuffer, permissionNeeded, walletNeeded } from "@/lib/money";
+import {
+  balanceForRound,
+  feeBuffer,
+  permissionForRound,
+  permissionNeeded,
+  walletNeeded,
+} from "@/lib/money";
 import { useNames } from "@/lib/people";
 import { ROTA_ABI, ROTA_ADDRESS } from "@/lib/rota";
 import { useCircle } from "@/lib/useRota";
@@ -78,14 +84,23 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const pot = contribution * BigInt(Math.max(0, memberCount - 1));
 
   /**
-   * One figure per person: everything they still owe across the rest of the
-   * circle, with the network charge already folded in. On Arc both come out of
-   * the same balance, so they are never shown separately — and readiness is
-   * judged against this combined figure, not against the share alone.
+   * The group view asks only what the contract asks: would THIS round fail
+   * because of this person? Judging everyone against their whole remaining
+   * obligation would flag people the contract would settle with, and would put
+   * one member's future finances in front of the rest of the circle.
    */
-  const needFor = (index: number) =>
+  const permissionForNext = (index: number) =>
+    permissionForRound(contribution, index, cycleIndex, memberCount, started);
+  const balanceForNext = (index: number) =>
+    balanceForRound(contribution, index, cycleIndex);
+
+  /**
+   * The whole-circle figure, with the network charge folded in. Shown only to
+   * the connected person, about themselves — never about anyone else.
+   */
+  const myTotalToFinish = (index: number) =>
     walletNeeded(contribution, index, cycleIndex, memberCount, buffer);
-  const permissionFor = (index: number) =>
+  const myPermissionToFinish = (index: number) =>
     permissionNeeded(contribution, index, cycleIndex, memberCount);
 
   type Standing = {
@@ -101,9 +116,10 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   };
 
   const standings: Standing[] = (preview ?? []).map((status, index) => {
-    const needed = needFor(index);
+    const needed = balanceForNext(index);
+    const permission = permissionForNext(index);
     const blocked = blockedMembers.some((b) => sameAddress(b, status.member));
-    const hasJoined = status.allowance >= permissionFor(index);
+    const hasJoined = status.allowance >= permission;
     const hasEnough = status.balance >= needed;
     return {
       member: status.member,
@@ -118,15 +134,22 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     };
   });
 
-  const owing = standings.filter((s) => s.needed > 0n);
+  // Anyone the next round depends on: they either owe this round, or the
+  // circle has not started and start() will check their permission.
+  const owing = standings.filter(
+    (s) => s.needed > 0n || permissionForNext(s.index) > 0n,
+  );
   const notJoined = owing.filter((s) => !s.hasJoined && !s.blocked);
   const notFunded = owing.filter((s) => s.hasJoined && !s.hasEnough && !s.blocked);
   const everyoneReady =
     preview !== undefined && owing.every((s) => s.ready) && !rotaBlocked;
 
   const mine = myIndex >= 0 ? standings[myIndex] : undefined;
-  const iNeed = isMember ? needFor(myIndex) : 0n;
-  const iOwe = isMember ? permissionFor(myIndex) : 0n;
+  // Mine alone: the whole-circle total, and the permission that covers it.
+  const myTotal = isMember ? myTotalToFinish(myIndex) : 0n;
+  const iOwe = isMember ? myPermissionToFinish(myIndex) : 0n;
+  const myRoundNeed = isMember ? balanceForNext(myIndex) : 0n;
+  const shortThisRound = Boolean(mine && !mine.hasEnough);
 
   const chainNow = latestBlock?.timestamp;
   const due = Boolean(
@@ -445,20 +468,31 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         </div>
       )}
 
-      {isConnected && isMember && iNeed > 0n && (
+      {isConnected && isMember && myTotal > 0n && (
         <div className="card">
           <p className="small muted" style={{ marginBottom: "0.25rem" }}>
-            {mine?.hasEnough
-              ? "You're covered for the rest of the circle"
-              : "You need in your wallet"}
+            To finish the circle you&rsquo;ll need
           </p>
           <p className="hero-figure">
-            {money(iNeed, decimals)}
-            <span className="hero-unit">USDC</span>
+            {money(myTotal, decimals)}
+            <span className="hero-unit">USDC in total</span>
           </p>
           <p className="small muted" style={{ margin: "0.5rem 0 0" }}>
-            You have {money(mine?.balance, decimals)} USDC. That figure covers
-            every round you still owe, including the small network charge.
+            That covers every round you still owe, including the small network
+            charge. You have {money(mine?.balance, decimals)} USDC today.
+          </p>
+        </div>
+      )}
+
+      {isConnected && isMember && shortThisRound && (
+        <div className="notice notice-wait">
+          <p className="notice-title">
+            You&rsquo;re short for this round.
+          </p>
+          <p className="small">
+            Top up to at least {money(myRoundNeed, decimals)} USDC before the
+            next turn, or the circle can&rsquo;t pay{" "}
+            {standings[cycleIndex]?.name ?? "the next person"}.
           </p>
         </div>
       )}
@@ -519,18 +553,13 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
               ? `${notFunded[0].name} hasn't got enough in their wallet yet.`
               : `${notFunded.length} people haven't got enough in their wallet yet.`}
           </p>
-          {notFunded.length === 1 ? (
-            <p className="small">
-              {notFunded[0].name} needs {money(notFunded[0].needed, decimals)}{" "}
-              USDC and has {money(notFunded[0].balance, decimals)} USDC.
-            </p>
-          ) : (
-            <p className="small">
-              {nameList(notFunded.map((s) => s.name))}. Each needs{" "}
-              {money(notFunded[0].needed, decimals)} USDC. They&rsquo;re marked
-              below.
-            </p>
-          )}
+          <p className="small">
+            {notFunded.length > 1 && (
+              <>{nameList(notFunded.map((s) => s.name))}. </>
+            )}
+            This round needs {money(contribution, decimals)} USDC from each
+            person paying in. Once that&rsquo;s there, the circle carries on.
+          </p>
         </div>
       )}
 
