@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./editorial.css";
 
 /*
  * Rota has two volumes and one brand.
@@ -184,11 +185,6 @@ a.back {
   padding: 3.5rem 1.25rem 4rem;
   background: var(--ink);
   color: var(--on-dark);
-}
-
-.hero .display em {
-  font-style: normal;
-  color: var(--blue);
 }
 
 /* A number that is the whole point of the screen. */

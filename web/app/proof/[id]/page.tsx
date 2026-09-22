@@ -5,6 +5,8 @@ import { use } from "react";
 import { useAccount, useReadContracts } from "wagmi";
 import type { Address } from "viem";
 
+import { NavBar } from "@/components/NavBar";
+import { SiteFooter } from "@/components/SiteFooter";
 import { deploymentFor } from "@/lib/deployments";
 import { addressUrl, txUrl } from "@/lib/explorer";
 import { dateInWords, money, shortAddress } from "@/lib/format";
@@ -109,7 +111,8 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
   return (
     <>
-      <header className="hero">
+      <NavBar />
+      <header className="hero grain" style={{ paddingTop: "6.5rem" }}>
         <div className="band-inner">
           <Link href={`/circle/${id}`} className="back" style={{ color: "var(--on-dark)" }}>
             ← Back to the circle
@@ -185,7 +188,7 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
         </div>
       </section>
 
-      <section className="band band-dark">
+      <section className="band band-dark grain">
         <div className="band-inner">
           <span className="label label-rule">02 / What&rsquo;s happened so far</span>
 
@@ -244,6 +247,8 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
       )}
         </div>
       </section>
+
+      <SiteFooter />
     </>
   );
 }

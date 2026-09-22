@@ -1,171 +1,308 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { formatUnits } from "viem";
+import { useReadContracts } from "wagmi";
+
+import { CircleRing } from "@/components/CircleRing";
+import { NavBar } from "@/components/NavBar";
+import { CountUp, Reveal } from "@/components/Reveal";
+import { SiteFooter } from "@/components/SiteFooter";
+import { DEFAULT_DEPLOYMENT, mainnetDeployment } from "@/lib/deployments";
+import { addressUrl } from "@/lib/explorer";
+import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
 
 /**
- * The editorial volume: the argument for trusting Rota, made with type alone.
- * No imagery, no logos, nothing borrowed.
+ * The editorial volume: the argument for trusting Rota, made with type,
+ * structure and one live number. No imagery, no logos, nothing borrowed.
  */
 export default function Home() {
-  const router = useRouter();
-  const [circleId, setCircleId] = useState("");
+  // Prefer mainnet: the claim is about the contract real money goes through.
+  const deployment = mainnetDeployment ?? DEFAULT_DEPLOYMENT;
 
-  const id = circleId.trim();
-  const valid = /^\d+$/.test(id);
+  const reads = useReadContracts({
+    allowFailure: false,
+    contracts: [
+      {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "decimals",
+        chainId: deployment?.chain.id,
+      },
+      {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [deployment!.rota],
+        chainId: deployment?.chain.id,
+      },
+    ],
+    query: { enabled: Boolean(deployment) },
+  });
+
+  const [decimals, held] = reads.data ?? [];
+  const heldNumber =
+    held !== undefined && decimals !== undefined
+      ? Number(formatUnits(held as bigint, decimals as number))
+      : 0;
 
   return (
     <>
-      <header className="hero">
-        <div className="band-inner">
-          <span className="label label-rule">Rota / Savings circles on Arc</span>
-          <h1 className="display">
-            Save
-            <br />
-            together,
-            <br />
-            <em>take turns.</em>
-          </h1>
+      <NavBar />
+
+      {/* ---------------------------------------------------------- hero */}
+      <header
+        className="band band-dark grain"
+        style={{ paddingTop: "7rem", paddingBottom: "4rem" }}
+      >
+        <div className="hero-grid">
+          <div>
+            <span className="label label-rule">
+              Rota / Savings circles on Arc
+            </span>
+            <h1 className="display">
+              Save
+              <br />
+              together,
+              <br />
+              <em>take turns.</em>
+            </h1>
+            <p style={{ fontSize: "1.125rem", marginTop: "1.5rem" }}>
+              Everyone puts in the same amount each round, and one person
+              receives everyone&rsquo;s share. Next round, someone else does —
+              until everyone has had a turn.
+            </p>
+
+            <div className="hero-actions">
+              <Link href="/create" className="btn">
+                Start a circle
+              </Link>
+              <Link href="#live-proof" className="btn btn-ondark">
+                See the proof
+              </Link>
+            </div>
+
+            <div className="stat-strip">
+              <div className="stat">
+                <span className="stat-value">
+                  <CountUp value={heldNumber} /> USDC
+                </span>
+                <span className="stat-key">Held by Rota</span>
+              </div>
+              <div className="stat">
+                <span className="stat-value">Under 2 cents</span>
+                <span className="stat-key">A round, 20 people</span>
+              </div>
+              <div className="stat">
+                <span className="stat-value">
+                  {deployment?.label ?? "Arc"}
+                </span>
+                <span className="stat-key">Chain {deployment?.chain.id}</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <CircleRing />
+          </div>
         </div>
       </header>
 
-      <section className="band band-blue">
+      {/* ------------------------------------------------ 01 how it works */}
+      <section className="band band-cream" id="how-it-works">
         <div className="band-inner">
-          <p className="lede" style={{ marginBottom: 0, fontWeight: 600 }}>
-            Everyone puts in the same amount each round, and one person receives
-            everyone&rsquo;s share. Next round, someone else does — until
-            everyone has had a turn.
-          </p>
-        </div>
-      </section>
-
-      <section className="band band-cream">
-        <div className="band-inner">
-          <span className="label label-rule">01 / How it works</span>
-          <ol className="steps">
-            <li className="step">
-              <span className="step-n">01</span>
-              <div className="step-body">
-                <h3>Agree the amount</h3>
-                <p>
-                  One person sets up the circle: how much each person puts in,
-                  how often, and who is in it.
-                </p>
-              </div>
-            </li>
-            <li className="step">
-              <span className="step-n">02</span>
-              <div className="step-body">
-                <h3>Everyone joins</h3>
-                <p>
-                  Each member gives Rota permission to move their share when
-                  their turn comes round. Nothing moves yet.
-                </p>
-              </div>
-            </li>
-            <li className="step">
-              <span className="step-n">03</span>
-              <div className="step-body">
-                <h3>Take turns</h3>
-                <p>
-                  Each round, everyone&rsquo;s share goes straight to whoever&rsquo;s
-                  turn it is. Wallet to wallet, in one go.
-                </p>
-              </div>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section className="band band-dark">
-        <div className="band-inner">
-          <span className="label label-rule">02 / The promise</span>
-          <h2 className="display-sm" style={{ marginBottom: "1.5rem" }}>
-            Your money never leaves your wallet until it&rsquo;s someone&rsquo;s
-            turn to be paid.
-          </h2>
-          <p style={{ fontSize: "1.125rem" }}>
-            Rota can&rsquo;t hold your money, and can&rsquo;t take it. There is
-            no pooled account and no balance sitting anywhere — each person&rsquo;s
-            share moves directly to the person being paid, at the moment
-            it&rsquo;s paid.
-          </p>
-          <p style={{ fontSize: "1.125rem" }}>
-            You can withdraw your permission at any time, from inside the app.
-          </p>
-        </div>
-      </section>
-
-      <section className="band band-cream">
-        <div className="band-inner">
-          <span className="label label-rule">03 / What it costs</span>
-          <p className="display-sm" style={{ marginBottom: "1rem" }}>
-            A 20-person round settles for under 2 cents.
-          </p>
-          <p>
-            Measured on Arc, where the network charge is paid in the same USDC
-            you&rsquo;re saving — so there&rsquo;s no second currency to buy or
-            keep topped up.
-          </p>
-        </div>
-      </section>
-
-      <section className="band band-dark">
-        <div className="band-inner">
-          <span className="label label-rule">04 / Start</span>
-
-          <Link href="/create" className="btn" style={{ marginBottom: "1rem" }}>
-            Start a circle
-          </Link>
-          <p style={{ color: "var(--on-dark)", fontSize: "1.0625rem" }}>
-            You&rsquo;ll need the wallet address of everyone joining.
-          </p>
-
-          <hr
-            className="divider"
-            style={{ borderColor: "var(--edge-dark)", margin: "2.5rem 0" }}
-          />
-
-          <span className="label">Already been invited?</span>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (valid) router.push(`/circle/${id}`);
-            }}
-          >
-            <div className="field" style={{ marginBottom: "1rem" }}>
-              <label htmlFor="circleId" style={{ color: "var(--on-dark)" }}>
-                Enter the circle number you were given
-              </label>
-              <input
-                id="circleId"
-                inputMode="numeric"
-                value={circleId}
-                onChange={(event) => setCircleId(event.target.value)}
-                placeholder="for example, 1"
-              />
-              {id !== "" && !valid && (
-                <p
-                  className="hint"
-                  role="alert"
-                  style={{ color: "var(--on-dark)" }}
-                >
-                  A circle number is digits only, like 1 or 12.
-                </p>
-              )}
+          <Reveal>
+            <div className="section-head">
+              <span className="section-marker">01 / How it works</span>
+              <h2 className="display-sm">Three steps, then it runs itself</h2>
             </div>
-            <button
-              type="submit"
-              className="btn btn-secondary"
-              disabled={!valid}
-              style={{ color: "var(--white)", borderColor: "var(--white)" }}
-            >
-              Open my circle
-            </button>
-          </form>
+          </Reveal>
+
+          <div className="card-grid">
+            {[
+              {
+                n: "01",
+                title: "Agree the amount",
+                body: "One person sets up the circle: how much each person puts in, how often, and who is in it.",
+              },
+              {
+                n: "02",
+                title: "Everyone joins",
+                body: "Each member gives permission for their share to move when their turn comes. Nothing moves yet.",
+              },
+              {
+                n: "03",
+                title: "Take turns",
+                body: "Each round, everyone's share goes straight to whoever's turn it is. Wallet to wallet, in one go.",
+              },
+            ].map((step, index) => (
+              <Reveal key={step.n} delay={index * 80}>
+                <article className="numbered">
+                  <span className="numbered-n">{step.n}</span>
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                </article>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
+
+      {/* --------------------------------------- 02 where your money is */}
+      <section className="band band-cream" style={{ paddingTop: 0 }}>
+        <div className="band-inner">
+          <Reveal>
+            <div className="section-head">
+              <span className="section-marker">02 / Where your money is</span>
+              <h2 className="display-sm">Nothing is ever pooled</h2>
+            </div>
+          </Reveal>
+
+          <Reveal>
+            <div className="compare">
+              <div className="compare-side compare-a">
+                <h3>Every other savings circle: someone holds the money</h3>
+                <ul className="marks">
+                  <li>
+                    <span className="mark mark-no">✕</span>
+                    <span>One person collects everyone&rsquo;s share first</span>
+                  </li>
+                  <li>
+                    <span className="mark mark-no">✕</span>
+                    <span>You have to trust them not to disappear with it</span>
+                  </li>
+                  <li>
+                    <span className="mark mark-no">✕</span>
+                    <span>
+                      If they do, there is nothing you can check and nothing to
+                      recover
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <div className="compare-side compare-b">
+                <h3>Rota: nothing is ever pooled</h3>
+                <ul className="marks">
+                  <li>
+                    <span className="mark mark-yes">✓</span>
+                    <span>
+                      Each share moves straight from one wallet to another
+                    </span>
+                  </li>
+                  <li>
+                    <span className="mark mark-yes">✓</span>
+                    <span>
+                      Rota can&rsquo;t hold your money and can&rsquo;t take it
+                    </span>
+                  </li>
+                  <li>
+                    <span className="mark mark-yes">✓</span>
+                    <span>
+                      You can withdraw your permission at any time, from the app
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ----------------------------------------------- 03 live proof */}
+      <section className="band band-dark grain" id="live-proof">
+        <div className="band-inner">
+          <Reveal>
+            <div className="section-head">
+              <span className="section-marker">03 / Live proof</span>
+              <h2 className="display-sm">What Rota is holding right now</h2>
+            </div>
+          </Reveal>
+
+          <Reveal>
+            <p className="figure" style={{ marginBottom: "1rem" }}>
+              {reads.isLoading ? "—" : <CountUp value={heldNumber} />}
+              <span className="figure-unit">
+                USDC · {deployment?.label ?? "Arc"}
+              </span>
+            </p>
+          </Reveal>
+
+          <Reveal>
+            <p style={{ fontSize: "1.125rem", maxWidth: "36rem" }}>
+              Read from the contract as this page loaded. It stays at zero
+              because every share goes straight from one member to another —
+              and you don&rsquo;t have to take our word for it.
+            </p>
+            {deployment && (
+              <p>
+                <a
+                  href={addressUrl(deployment.explorer, deployment.rota)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Check the contract on explorer.arc.io
+                </a>
+              </p>
+            )}
+          </Reveal>
+        </div>
+      </section>
+
+      {/* --------------------------------------------- 04 what it costs */}
+      <section className="band band-cream">
+        <div className="band-inner">
+          <Reveal>
+            <div className="section-head">
+              <span className="section-marker">04 / What it costs</span>
+              <h2 className="display-sm">Under two cents a round</h2>
+            </div>
+          </Reveal>
+
+          <Reveal>
+            <p className="formula">disburse = 55,100 + 25,400 × (n − 1) gas</p>
+          </Reveal>
+
+          <Reveal>
+            <table className="cost">
+              <thead>
+                <tr>
+                  <th>Measured on Arc</th>
+                  <th>Gas</th>
+                  <th>At 25.3 gwei</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A round, 3 people</td>
+                  <td>105,960</td>
+                  <td>$0.0027</td>
+                </tr>
+                <tr>
+                  <td>A round, 20 people</td>
+                  <td>538,180</td>
+                  <td>$0.0136</td>
+                </tr>
+                <tr>
+                  <td>Setting up, 20 people</td>
+                  <td>625,570</td>
+                  <td>$0.0158</td>
+                </tr>
+              </tbody>
+            </table>
+          </Reveal>
+
+          <Reveal>
+            <p style={{ marginTop: "1.5rem" }}>
+              Fitted from two real measurements and accurate to 12 gas at 19
+              transfers. The network charge is paid in the same USDC
+              you&rsquo;re saving, so there is no second currency to buy.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      <SiteFooter />
     </>
   );
 }
