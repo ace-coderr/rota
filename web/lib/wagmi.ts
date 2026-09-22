@@ -10,10 +10,15 @@ import { SUPPORTED_CHAIN_IDS } from "./deployments";
  * which deployment the app talks to; a chain with no deployed contract is
  * treated as the wrong network.
  */
-const chains = [arcTestnet, ...(arcMainnet ? [arcMainnet] : [])] as [
-  Chain,
-  ...Chain[],
-];
+/**
+ * Mainnet first when it is configured, so wagmi's default chain (chains[0])
+ * matches DEFAULT_DEPLOYMENT. If those two disagree the app reads one chain
+ * for a contract deployed on the other, and every read quietly returns
+ * nothing.
+ */
+const chains: [Chain, ...Chain[]] = arcMainnet
+  ? [arcMainnet, arcTestnet]
+  : [arcTestnet];
 
 export const wagmiConfig = createConfig({
   chains,

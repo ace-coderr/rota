@@ -47,6 +47,9 @@ export function useCircle(circleId: bigint | undefined) {
   // is no wallet, so the read-only views still work.
   const deployment = deploymentFor(chainId);
   const ROTA_ADDRESS = deployment?.rota;
+  // Always name the chain. Without it the reads go to wagmi's default chain,
+  // which may not be the one this contract is deployed on.
+  const readChainId = deployment?.chain.id;
 
   const enabled = Boolean(ROTA_ADDRESS) && circleId !== undefined;
 
@@ -58,23 +61,27 @@ export function useCircle(circleId: bigint | undefined) {
         abi: ROTA_ABI,
         functionName: "getCircle",
         args: [circleId!],
+        chainId: readChainId,
       },
       {
         address: ROTA_ADDRESS,
         abi: ROTA_ABI,
         functionName: "getMembers",
         args: [circleId!],
+        chainId: readChainId,
       },
       {
         address: ROTA_ADDRESS,
         abi: ROTA_ABI,
         functionName: "previewRound",
         args: [circleId!],
+        chainId: readChainId,
       },
       {
         address: USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: "decimals",
+        chainId: readChainId,
       },
     ],
     query: { enabled },
@@ -84,6 +91,7 @@ export function useCircle(circleId: bigint | undefined) {
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "allowance",
+    chainId: readChainId,
     args: address && ROTA_ADDRESS ? [address, ROTA_ADDRESS] : undefined,
     query: { enabled: Boolean(address && ROTA_ADDRESS) },
   });
@@ -92,6 +100,7 @@ export function useCircle(circleId: bigint | undefined) {
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "balanceOf",
+    chainId: readChainId,
     args: address ? [address] : undefined,
     query: { enabled: Boolean(address) },
   });
@@ -117,12 +126,14 @@ export function useCircle(circleId: bigint | undefined) {
         abi: USDC_ARC_ABI,
         functionName: "isBlacklisted" as const,
         args: [member] as const,
+        chainId: readChainId,
       })),
       {
         address: USDC_ADDRESS,
         abi: USDC_ARC_ABI,
         functionName: "isBlacklisted" as const,
         args: [ROTA_ADDRESS!] as const,
+        chainId: readChainId,
       },
     ],
     query: { enabled: Boolean(memberList?.length && ROTA_ADDRESS) },

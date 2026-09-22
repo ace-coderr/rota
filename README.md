@@ -2,6 +2,8 @@
 
 A rotating savings circle, settled in USDC on [Arc](https://arc.network).
 
+> **Unaudited — use small amounts.**
+
 A group agrees on an amount and a schedule: every round, each member puts in the
 same amount, and one member receives the whole pot. The turn passes down the
 list each round until everyone has been paid exactly once, at which point every
@@ -50,7 +52,7 @@ round is a single transaction. The 20-member round below settled in one block.
 | network | chain | address |
 | --- | --- | --- |
 | Arc testnet | `5042002` | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 |
-| Arc mainnet | `5042` | not deployed yet |
+| Arc mainnet | `5042` | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 |
 
 USDC is the predeploy at `0x3600000000000000000000000000000000000000` on both,
 6 decimals, read from the token rather than assumed.
@@ -60,6 +62,27 @@ script refuses to run against chain 5042 without it, prints the deployer and its
 USDC balance, and then waits for a typed confirmation at an interactive prompt.
 There is no flag to skip that prompt, so a mainnet deploy cannot be made by
 anything that is not a person at a terminal.
+
+The mainnet deployment was checked independently after the fact: the deployer's
+nonce is 1, so there is exactly one deployment; `usdc()` returns the predeploy;
+`MAX_MEMBERS` is 20; `circleCount` is 0; and the contract holds 0 USDC. The
+deployed runtime bytecode matches a local build byte for byte apart from the
+five immutable slots holding the USDC address.
+
+Source is verified on
+[Sourcify](https://sourcify.dev/server/repo-ui/5042/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf).
+Verification through explorer.arc.io's own API is not currently possible from a
+script — the endpoint sits behind a bot challenge that returns 403 — so the
+explorer shows the contract unverified until someone submits it through the web
+form. Regenerate the standard JSON input for that form with:
+
+```bash
+npm run build:contracts   # then read artifacts/build-info/*.json -> .input
+```
+
+Compiler settings for the form: solc `0.8.24`, optimizer enabled with 200 runs,
+EVM version `shanghai`, constructor argument
+`0x3600000000000000000000000000000000000000`.
 
 ### Custody, checked on real receipts
 

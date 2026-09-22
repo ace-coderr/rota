@@ -16,3 +16,6 @@ typechain-types/
 # misc
 *.log
 .DS_Store
+
+# Regenerable verification bundle (standard JSON input for the explorer form)
+rota-standard-input.json

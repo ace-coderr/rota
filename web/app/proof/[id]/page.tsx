@@ -20,12 +20,12 @@ import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
 export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const { id } = use(params);
   const circleId = /^\d+$/.test(id) ? BigInt(id) : undefined;
-  const publicClient = usePublicClient();
-
   // No wallet needed. Follow the connected chain when there is one, otherwise
   // show the default deployment.
   const { chainId } = useAccount();
   const deployment = deploymentFor(chainId);
+  // Pinned to the deployment's chain, not wagmi's default.
+  const publicClient = usePublicClient({ chainId: deployment?.chain.id });
   const ROTA_ADDRESS = deployment?.rota;
   const ROTA_DEPLOY_BLOCK = deployment?.deployBlock ?? 0n;
   const explorer = deployment?.explorer ?? "";
@@ -33,25 +33,33 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const reads = useReadContracts({
     allowFailure: false,
     contracts: [
-      { address: USDC_ADDRESS, abi: ERC20_ABI, functionName: "decimals" },
+      {
+        address: USDC_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "decimals",
+        chainId: deployment?.chain.id,
+      },
       {
         // The claim, checkable by anyone: what Rota itself is holding.
         address: USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: "balanceOf",
         args: [ROTA_ADDRESS!],
+        chainId: deployment?.chain.id,
       },
       {
         address: ROTA_ADDRESS,
         abi: ROTA_ABI,
         functionName: "getMembers",
         args: [circleId!],
+        chainId: deployment?.chain.id,
       },
       {
         address: ROTA_ADDRESS,
         abi: ROTA_ABI,
         functionName: "getCircle",
         args: [circleId!],
+        chainId: deployment?.chain.id,
       },
     ],
     query: { enabled: Boolean(ROTA_ADDRESS) && circleId !== undefined },
