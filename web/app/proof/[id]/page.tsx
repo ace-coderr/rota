@@ -7,7 +7,8 @@ import type { Address } from "viem";
 
 import { NavBar } from "@/components/NavBar";
 import { SiteFooter } from "@/components/SiteFooter";
-import { deploymentFor } from "@/lib/deployments";
+import { NOTHING_CONFIGURED, deploymentFor } from "@/lib/deployments";
+import { ConfigNotice } from "@/components/ConfigNotice";
 import { addressUrl, txUrl } from "@/lib/explorer";
 import { dateInWords, money, shortAddress } from "@/lib/format";
 import { turnsFromState, useDisbursementLinks, withLinks } from "@/lib/history";
@@ -102,9 +103,20 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
   if (!deployment) {
     return (
-      <main>
+      <main className="sheet">
         <h1>Record unavailable</h1>
-        <p>Rota isn&rsquo;t set up on this site yet.</p>
+        {NOTHING_CONFIGURED ? (
+          <ConfigNotice />
+        ) : (
+          <div className="notice notice-wait">
+            <p className="notice-title">
+              Your wallet is on a network Rota isn&rsquo;t on.
+            </p>
+            <p className="small">
+              Switch networks, or sign out to see the public record.
+            </p>
+          </div>
+        )}
       </main>
     );
   }

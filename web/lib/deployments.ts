@@ -73,3 +73,33 @@ export function deploymentFor(chainId: number | undefined) {
 }
 
 export const SUPPORTED_CHAIN_IDS = DEPLOYMENTS.map((d) => d.chain.id);
+
+/**
+ * Which environment variables are absent, by name.
+ *
+ * Next inlines NEXT_PUBLIC_* at BUILD time, so these have to be read as
+ * literal member accesses — and, more importantly, adding them to a host
+ * after a build has already run does not change that build. A page that
+ * cannot be configured should say which variable is missing rather than
+ * "try again later", because the person who can fix it is reading the page.
+ */
+export function missingMainnetConfig(): string[] {
+  const missing: string[] = [];
+  if (!process.env.NEXT_PUBLIC_ARC_MAINNET_CHAIN_ID) {
+    missing.push("NEXT_PUBLIC_ARC_MAINNET_CHAIN_ID");
+  }
+  if (!process.env.NEXT_PUBLIC_ARC_MAINNET_RPC_URL) {
+    missing.push("NEXT_PUBLIC_ARC_MAINNET_RPC_URL");
+  }
+  if (!process.env.NEXT_PUBLIC_ROTA_ADDRESS_MAINNET) {
+    missing.push("NEXT_PUBLIC_ROTA_ADDRESS_MAINNET");
+  }
+  return missing;
+}
+
+export function missingTestnetConfig(): string[] {
+  return process.env.NEXT_PUBLIC_ROTA_ADDRESS ? [] : ["NEXT_PUBLIC_ROTA_ADDRESS"];
+}
+
+/** True when no chain at all is configured — the only genuine "not set up". */
+export const NOTHING_CONFIGURED = DEPLOYMENTS.length === 0;

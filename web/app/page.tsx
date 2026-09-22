@@ -33,7 +33,9 @@ export default function Home() {
         address: USDC_ADDRESS,
         abi: ERC20_ABI,
         functionName: "balanceOf",
-        args: [deployment!.rota],
+        // Guarded, not asserted: with no chain configured this renders during
+        // the build, and a non-null assertion here failed the whole export.
+        args: deployment ? [deployment.rota] : undefined,
         chainId: deployment?.chain.id,
       },
     ],

@@ -29,7 +29,8 @@ import {
 } from "@/lib/money";
 import { useNames, useNamesFromInvite } from "@/lib/people";
 import { ROTA_ABI } from "@/lib/rota";
-import { deploymentFor } from "@/lib/deployments";
+import { NOTHING_CONFIGURED, deploymentFor } from "@/lib/deployments";
+import { ConfigNotice } from "@/components/ConfigNotice";
 import { useCircle } from "@/lib/useRota";
 import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
@@ -229,8 +230,28 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         <Link href="/" className="back">
           ← Back
         </Link>
-        <h1>Circle not found</h1>
-        <p>Check the number you were given and try again.</p>
+        {circleId === undefined ? (
+          <>
+            <h1>Circle not found</h1>
+            <p>Check the number you were given and try again.</p>
+          </>
+        ) : NOTHING_CONFIGURED ? (
+          <>
+            <h1>Not available</h1>
+            <ConfigNotice />
+          </>
+        ) : (
+          <>
+            <h1>Wrong network</h1>
+            <div className="notice notice-wait">
+              <p className="notice-title">
+                Your wallet is on a network Rota isn&rsquo;t on.
+              </p>
+              <p className="small">Switch networks to see this circle.</p>
+            </div>
+            <WalletBar />
+          </>
+        )}
       </main>
     );
   }

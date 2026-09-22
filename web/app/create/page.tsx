@@ -13,7 +13,12 @@ import {
   type TxFailure,
 } from "@/lib/errors";
 import { ROTA_ABI } from "@/lib/rota";
-import { deploymentFor } from "@/lib/deployments";
+import {
+  DEFAULT_DEPLOYMENT,
+  NOTHING_CONFIGURED,
+  deploymentFor,
+} from "@/lib/deployments";
+import { ConfigNotice } from "@/components/ConfigNotice";
 import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { useUsdcDecimals } from "@/lib/useRota";
 import { inviteLink } from "@/lib/people";
@@ -141,14 +146,26 @@ export default function CreatePage() {
     }
   }
 
+  // Two different failures were both showing as "not set up": no chain
+  // configured at all, and a wallet connected to a chain Rota is not on.
+  // Only the first is a configuration problem.
   if (!ROTA_ADDRESS) {
     return (
       <main className="sheet">
         <h1>Start a circle</h1>
-        <div className="notice notice-stop">
-          <p className="notice-title">Rota isn&rsquo;t set up on this site yet.</p>
-          <p className="small">Please try again later.</p>
-        </div>
+        {NOTHING_CONFIGURED ? (
+          <ConfigNotice />
+        ) : (
+          <div className="notice notice-wait">
+            <p className="notice-title">
+              Your wallet is on a network Rota isn&rsquo;t on.
+            </p>
+            <p className="small">
+              Switch to {DEFAULT_DEPLOYMENT?.label ?? "Arc"} to start a circle.
+            </p>
+          </div>
+        )}
+        <WalletBar reason="Connect your wallet to set up a circle." />
       </main>
     );
   }
