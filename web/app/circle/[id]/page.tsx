@@ -3,13 +3,7 @@
 import Link from "next/link";
 import { use, useState } from "react";
 import type { Address } from "viem";
-import {
-  useAccount,
-  useBlock,
-  useGasPrice,
-  usePublicClient,
-  useWriteContract,
-} from "wagmi";
+import { useAccount, useBlock, useGasPrice } from "wagmi";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { WalletBar } from "@/components/WalletBar";
@@ -37,16 +31,22 @@ import { useNames } from "@/lib/people";
 import { ROTA_ABI } from "@/lib/rota";
 import { deploymentFor } from "@/lib/deployments";
 import { useCircle } from "@/lib/useRota";
+import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
 
 export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const { id } = use(params);
   const circleId = /^\d+$/.test(id) ? BigInt(id) : undefined;
 
-  const { address, isConnected, chainId } = useAccount();
-  const publicClient = usePublicClient();
-  const { writeContractAsync } = useWriteContract();
+  const { chainId } = useAccount();
   const { data: latestBlock } = useBlock({ watch: true });
+
+  // One wallet interface for both kinds: a browser extension, or a Circle
+  // user-controlled wallet created with Google or email. Same call, same
+  // encoding, same contract — only the approval surface differs.
+  const wallet = useRotaWallet();
+  const address = wallet.address;
+  const isConnected = wallet.isReady;
   const { data: gasPrice } = useGasPrice();
 
   const {
@@ -163,7 +163,10 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   const busy = pending !== undefined;
 
-  async function run(label: string, send: () => Promise<`0x${string}`>) {
+  async function run(
+    label: string,
+    call: Parameters<typeof wallet.send>[0],
+  ) {
     setFailure(undefined);
     if (networkFailure) {
       setFailure(networkFailure);
@@ -172,8 +175,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
     setPending(label);
     try {
-      const hash = await send();
-      await publicClient!.waitForTransactionReceipt({ hash });
+      await wallet.send(call, deployment!.chain.id);
       await refetchAll();
     } catch (error) {
       setFailure(
@@ -352,14 +354,12 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           className="btn"
           disabled={busy}
           onClick={() =>
-            run("join", () =>
-              writeContractAsync({
-                address: USDC_ADDRESS,
-                abi: ERC20_ABI,
-                functionName: "approve",
-                args: [rota, iOwe],
-              }),
-            )
+            run("join", {
+              address: USDC_ADDRESS,
+              abi: ERC20_ABI,
+              functionName: "approve",
+              args: [rota, iOwe],
+            })
           }
         >
           {pending === "join" ? "Joining…" : "Join this circle"}
@@ -378,14 +378,12 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           className="btn"
           disabled={busy}
           onClick={() =>
-            run("start", () =>
-              writeContractAsync({
-                address: rota,
-                abi: ROTA_ABI,
-                functionName: "start",
-                args: [circleId],
-              }),
-            )
+            run("start", {
+              address: rota,
+              abi: ROTA_ABI,
+              functionName: "start",
+              args: [circleId],
+            })
           }
         >
           {pending === "start" ? "Starting…" : "Start the circle"}
@@ -404,14 +402,12 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           className="btn"
           disabled={busy}
           onClick={() =>
-            run("pay", () =>
-              writeContractAsync({
-                address: rota,
-                abi: ROTA_ABI,
-                functionName: "disburse",
-                args: [circleId],
-              }),
-            )
+            run("pay", {
+              address: rota,
+              abi: ROTA_ABI,
+              functionName: "disburse",
+              args: [circleId],
+            })
           }
         >
           {pending === "pay"

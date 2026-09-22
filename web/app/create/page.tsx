@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { isAddress, parseUnits, type Address } from "viem";
-import { useAccount, usePublicClient, useWriteContract } from "wagmi";
+import { useAccount, usePublicClient } from "wagmi";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { WalletBar } from "@/components/WalletBar";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/errors";
 import { ROTA_ABI } from "@/lib/rota";
 import { deploymentFor } from "@/lib/deployments";
+import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { useUsdcDecimals } from "@/lib/useRota";
 
 const FREQUENCIES = [
@@ -23,10 +24,12 @@ const FREQUENCIES = [
 ];
 
 export default function CreatePage() {
-  const { isConnected, chainId } = useAccount();
-  const publicClient = usePublicClient();
+  const { chainId } = useAccount();
   const { data: decimals } = useUsdcDecimals();
-  const { writeContractAsync } = useWriteContract();
+  const wallet = useRotaWallet();
+  const isConnected = wallet.isReady;
+  const deployment = deploymentFor(chainId);
+  const publicClient = usePublicClient({ chainId: deployment?.chain.id });
 
   const [amount, setAmount] = useState("");
   const [period, setPeriod] = useState(FREQUENCIES[0].seconds);
@@ -69,7 +72,6 @@ export default function CreatePage() {
     problems.push("Someone is listed twice. Each person can only appear once.");
   }
 
-  const deployment = deploymentFor(chainId);
   const ROTA_ADDRESS = deployment?.rota;
   const networkFailure =
     isConnected && !deployment
@@ -95,18 +97,29 @@ export default function CreatePage() {
 
     setWorking(true);
     try {
-      const hash = await writeContractAsync({
+      await wallet.send(
+        {
+          address: rota,
+          abi: ROTA_ABI,
+          functionName: "createCircle",
+          args: [
+            members as Address[],
+            parseUnits(amount.trim(), decimals),
+            BigInt(period),
+          ],
+        },
+        deployment!.chain.id,
+      );
+
+      // The id is the contract's return value, which a transaction cannot hand
+      // back — and the Circle path has no receipt to read a log from. Read the
+      // counter instead: the circle just created is the one before it.
+      const count = (await publicClient!.readContract({
         address: rota,
         abi: ROTA_ABI,
-        functionName: "createCircle",
-        args: [members as Address[], parseUnits(amount.trim(), decimals), BigInt(period)],
-      });
-
-      const receipt = await publicClient!.waitForTransactionReceipt({ hash });
-      const log = receipt.logs.find(
-        (l) => l.address.toLowerCase() === rota.toLowerCase(),
-      );
-      if (log?.topics[1]) setCircleId(BigInt(log.topics[1]));
+        functionName: "circleCount",
+      })) as bigint;
+      if (count > 0n) setCircleId(count - 1n);
     } catch (error) {
       setFailure(classifyTxError(error));
     } finally {
