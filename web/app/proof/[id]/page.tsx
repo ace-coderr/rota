@@ -79,17 +79,23 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const naming = useNames(id, memberList);
 
   const contribution = circle ? (circle[0] as bigint) : 0n;
+  const period = circle ? (circle[1] as bigint) : 0n;
+  const nextDueAt = circle ? (circle[2] as bigint) : 0n;
   const cycleIndex = circle ? Number(circle[3]) : 0;
   const started = circle ? Boolean(circle[4]) : false;
 
   // Primary history: derived from state, so it is always available.
   const turns = turnsFromState(memberList, cycleIndex, contribution);
 
-  // Secondary: transaction links, best effort.
-  const links = useDisbursementLinks(deployment, circleId, turns.length);
+  // Secondary: transaction links, looked up at each turn's due time rather
+  // than swept for from the deploy block.
+  const links = useDisbursementLinks(
+    deployment,
+    circleId,
+    turns,
+    circle ? { period, nextDueAt, cycleIndex } : undefined,
+  );
   const rows = withLinks(turns, links.data);
-
-  const linksMissing = turns.length > 0 && !(links.data?.complete ?? false);
 
   if (!deployment) {
     return (
@@ -192,49 +198,38 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
                     {naming.nameOf(turn.recipient)} received{" "}
                     {money(turn.amount, decimals as number | undefined)} USDC
                   </span>
-                  {(turn.timestamp || turn.hash) && (
-                    <>
-                      <br />
-                      <span className="person-detail">
-                        {turn.timestamp && dateInWords(turn.timestamp)}
-                        {turn.timestamp && turn.hash && " · "}
-                        {turn.hash && (
-                          <a
-                            href={txUrl(explorer, turn.hash)}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            See the record
-                          </a>
-                        )}
-                      </span>
-                    </>
-                  )}
+                  <br />
+                  <span className="person-detail">
+                    {turn.hash ? (
+                      <>
+                        {turn.timestamp && `${dateInWords(turn.timestamp)} · `}
+                        <a
+                          href={txUrl(explorer, turn.hash)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          See the record
+                        </a>
+                      </>
+                    ) : links.isLoading ? (
+                      "Looking up the transaction…"
+                    ) : (
+                      // This turn alone could not be located. The turn itself
+                      // is not in doubt — it comes from contract state.
+                      <a
+                        href={addressUrl(explorer, deployment.rota)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Find it on the explorer
+                      </a>
+                    )}
+                  </span>
                 </span>
               </div>
             ))}
           </div>
 
-          {linksMissing && (
-            <p className="small muted">
-              {links.isLoading
-                ? "Looking up the individual transactions…"
-                : "Individual transaction links aren’t available for every turn — this network limits how far back they can be searched. The turns above are read directly from the contract, which is the authoritative record."}
-              {!links.isLoading && (
-                <>
-                  {" "}
-                  <a
-                    href={addressUrl(explorer, deployment.rota)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    See every transaction on the explorer
-                  </a>
-                  .
-                </>
-              )}
-            </p>
-          )}
         </>
       )}
     </main>
