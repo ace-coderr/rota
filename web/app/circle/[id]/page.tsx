@@ -67,6 +67,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [pending, setPending] = useState<string | undefined>();
   const [showNames, setShowNames] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   const deployment = deploymentFor(chainId);
   const ROTA_ADDRESS = deployment?.rota;
@@ -120,6 +121,8 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     balance: bigint;
     hasJoined: boolean;
     hasEnough: boolean;
+    /** Granted zero while they still owe: they have withdrawn, not fallen short. */
+    stopped: boolean;
     blocked: boolean;
     ready: boolean;
     needed: bigint;
@@ -131,6 +134,19 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     const blocked = blockedMembers.some((b) => sameAddress(b, status.member));
     const hasJoined = status.allowance >= permission;
     const hasEnough = status.balance >= needed;
+
+    /**
+     * Withdrawing is not the same as running low, and the circle should not
+     * describe it as if it were.
+     *
+     * start() required a full rotation's permission from everyone, so once a
+     * circle is running a member at exactly zero while they still owe has
+     * taken their permission back. Before it starts, zero just means they have
+     * not joined yet.
+     */
+    const stopped =
+      started && !finished && permission > 0n && status.allowance === 0n;
+
     return {
       member: status.member,
       index,
@@ -138,6 +154,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       balance: status.balance,
       hasJoined,
       hasEnough,
+      stopped,
       blocked,
       ready: hasJoined && hasEnough && !blocked,
       needed,
@@ -149,7 +166,10 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const owing = standings.filter(
     (s) => s.needed > 0n || permissionForNext(s.index) > 0n,
   );
-  const notJoined = owing.filter((s) => !s.hasJoined && !s.blocked);
+  const stopped = owing.filter((s) => s.stopped && !s.blocked);
+  const notJoined = owing.filter(
+    (s) => !s.hasJoined && !s.stopped && !s.blocked,
+  );
   const notFunded = owing.filter((s) => s.hasJoined && !s.hasEnough && !s.blocked);
   const everyoneReady =
     preview !== undefined && owing.every((s) => s.ready) && !rotaBlocked;
@@ -160,6 +180,13 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const iOwe = isMember ? myPermissionToFinish(myIndex) : 0n;
   const myRoundNeed = isMember ? balanceForNext(myIndex) : 0n;
   const shortThisRound = Boolean(mine && !mine.hasEnough);
+
+  // I have had my turn, and the circle is still running: leaving now takes
+  // from the people whose turn has not come.
+  const alreadyPaid = Boolean(started && !finished && isMember && myIndex < cycleIndex);
+  const stillWaiting = standings.filter(
+    (s) => s.index >= cycleIndex && s.index !== myIndex,
+  );
 
   const chainNow = latestBlock?.timestamp;
   const due = Boolean(
@@ -250,12 +277,15 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
               <span className="address">{shortAddress(s.member)}</span>
             </span>
             <span className="person-status">
-              {s.index < cycleIndex ? (
+              {s.blocked ? (
+                <span className="tag-short">On hold</span>
+              ) : s.stopped ? (
+                // Withdrawn, not short. Different problem, different remedy.
+                <span className="tag-short">Stopped paying</span>
+              ) : s.index < cycleIndex ? (
                 <span className="tag-paid">Paid</span>
               ) : s.index === cycleIndex && started ? (
                 <span className="tag-now">Their turn</span>
-              ) : s.blocked ? (
-                <span className="tag-short">On hold</span>
               ) : !s.hasJoined ? (
                 <span className="tag-short">Not joined</span>
               ) : !s.hasEnough ? (
@@ -535,6 +565,23 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         </div>
       )}
 
+      {!rotaBlocked && stopped.length > 0 && (
+        <div className="notice notice-stop">
+          <p className="notice-title">
+            {stopped.length === 1
+              ? `${stopped[0].name} has stopped paying.`
+              : `${stopped.length} people have stopped paying.`}
+          </p>
+          <p className="small">
+            {stopped.length > 1 && <>{nameList(stopped.map((s) => s.name))}. </>}
+            {stopped.length === 1 ? "They have" : "They have"} withdrawn
+            permission for Rota to move their money, so the circle can&rsquo;t
+            settle another round. This isn&rsquo;t the same as running low —
+            adding funds won&rsquo;t fix it. Nobody has been charged.
+          </p>
+        </div>
+      )}
+
       {!rotaBlocked && notJoined.length > 0 && (
         <div className="notice notice-wait">
           <p className="notice-title">
@@ -594,28 +641,90 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
             money is not touched — it stays where it is. Nothing further can be
             taken for this circle unless you join again.
           </p>
-          <button
-            type="button"
-            className="btn btn-quiet"
-            disabled={busy}
-            onClick={() =>
-              run("leave", {
-                address: USDC_ADDRESS,
-                abi: ERC20_ABI,
-                functionName: "approve",
-                args: [rota, 0n],
-              })
-            }
-          >
-            {pending === "leave"
-              ? "Stopping…"
-              : "Stop Rota from moving your money"}
-          </button>
-          <p className="action-note">
-            The others will see that you have left, and the circle
-            can&rsquo;t settle another round until you rejoin or they remove
-            you.
-          </p>
+
+          {/*
+            Leaving before your turn costs you your place. Leaving after it
+            costs other people their money, so that case is not a single tap:
+            it says who is still owed, by name, and asks again.
+          */}
+          {alreadyPaid && !confirmLeave ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() => setConfirmLeave(true)}
+              >
+                Stop Rota from moving your money
+              </button>
+              <p className="action-note">
+                You&rsquo;ve already received everyone&rsquo;s share.
+              </p>
+            </>
+          ) : alreadyPaid ? (
+            <div className="notice notice-stop">
+              <p className="notice-title">
+                You&rsquo;ve already received everyone&rsquo;s share.
+              </p>
+              <p>
+                If you leave now,{" "}
+                {stillWaiting.length > 0
+                  ? `${nameList(stillWaiting.map((p) => p.name))} won’t get theirs.`
+                  : "the people still waiting won’t get theirs."}{" "}
+                The circle can&rsquo;t settle another round without you.
+              </p>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() =>
+                  run("leave", {
+                    address: USDC_ADDRESS,
+                    abi: ERC20_ABI,
+                    functionName: "approve",
+                    args: [rota, 0n],
+                  })
+                }
+              >
+                {pending === "leave"
+                  ? "Stopping…"
+                  : "Leave anyway, and stop my payments"}
+              </button>
+              <button
+                type="button"
+                className="btn"
+                disabled={busy}
+                onClick={() => setConfirmLeave(false)}
+              >
+                Stay in the circle
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy}
+                onClick={() =>
+                  run("leave", {
+                    address: USDC_ADDRESS,
+                    abi: ERC20_ABI,
+                    functionName: "approve",
+                    args: [rota, 0n],
+                  })
+                }
+              >
+                {pending === "leave"
+                  ? "Stopping…"
+                  : "Stop Rota from moving your money"}
+              </button>
+              <p className="action-note">
+                The others will see that you have left, and the circle
+                can&rsquo;t settle another round until you rejoin or they
+                remove you.
+              </p>
+            </>
+          )}
         </>
       )}
 
