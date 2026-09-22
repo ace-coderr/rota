@@ -16,6 +16,7 @@ import { ROTA_ABI } from "@/lib/rota";
 import { deploymentFor } from "@/lib/deployments";
 import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { useUsdcDecimals } from "@/lib/useRota";
+import { inviteLink } from "@/lib/people";
 
 const FREQUENCIES = [
   { label: "Every week", seconds: "604800" },
@@ -37,11 +38,24 @@ export default function CreatePage() {
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [circleId, setCircleId] = useState<bigint | undefined>();
   const [working, setWorking] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const members = membersText
-    .split(/[\s,]+/)
-    .map((value) => value.trim())
-    .filter(Boolean);
+  /**
+   * One person per line: an address, optionally followed by their name.
+   * Names never leave this browser — they travel to the other members in the
+   * invite link's #fragment, which is not sent to any server and never
+   * touches the chain.
+   */
+  const entries = membersText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [first, ...rest] = line.split(/[\s,]+/);
+      return { address: first, name: rest.join(" ").trim() };
+    });
+
+  const members = entries.map((entry) => entry.address);
 
   const invalid = members.filter((m) => !isAddress(m));
   const duplicates = [
@@ -129,7 +143,7 @@ export default function CreatePage() {
 
   if (!ROTA_ADDRESS) {
     return (
-      <main>
+      <main className="sheet">
         <h1>Start a circle</h1>
         <div className="notice notice-stop">
           <p className="notice-title">Rota isn&rsquo;t set up on this site yet.</p>
@@ -139,9 +153,21 @@ export default function CreatePage() {
     );
   }
 
+  const namedMembers = Object.fromEntries(
+    entries
+      .filter((entry) => entry.name)
+      .map((entry) => [entry.address.toLowerCase(), entry.name]),
+  );
+
   if (circleId !== undefined) {
+    const invite = inviteLink(
+      typeof window === "undefined" ? "" : window.location.origin,
+      circleId.toString(),
+      namedMembers,
+    );
+
     return (
-      <main>
+      <main className="sheet">
         <h1>Your circle is ready</h1>
         <p className="lede">
           Share this number with everyone joining. They&rsquo;ll need it to find
@@ -149,17 +175,38 @@ export default function CreatePage() {
         </p>
 
         <div className="card" style={{ textAlign: "center", padding: "2rem 1.25rem" }}>
-          <p className="small muted" style={{ marginBottom: "0.25rem" }}>
+          <span className="label" style={{ marginBottom: "0.5rem" }}>
             Circle number
-          </p>
-          <p className="hero-figure">{circleId.toString()}</p>
+          </span>
+          <p className="sum">{circleId.toString()}</p>
         </div>
 
-        <Link
-          href={`/circle/${circleId}`}
-          className="btn"
-          style={{ textDecoration: "none" }}
+        <h2>Send this link to everyone</h2>
+        <p>
+          It opens the circle for them, with the names you typed already filled
+          in.
+        </p>
+        <div className="share">{invite}</div>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => {
+            navigator.clipboard?.writeText(invite).then(
+              () => setCopied(true),
+              () => setCopied(false),
+            );
+          }}
         >
+          {copied ? "Copied" : "Copy the link"}
+        </button>
+        <p className="action-note">
+          The names are only in the link itself. They are never sent to us and
+          never go on the blockchain.
+        </p>
+
+        <hr className="divider" />
+
+        <Link href={`/circle/${circleId}`} className="btn">
           Open my circle
         </Link>
         <p className="action-note">
@@ -171,14 +218,14 @@ export default function CreatePage() {
   }
 
   return (
-    <main>
+    <main className="sheet">
       <Link href="/" className="back">
         ← Back
       </Link>
       <h1>Start a circle</h1>
       <p className="lede">
         Everyone puts in the same amount each round, and takes it in turns to
-        receive the pot.
+        receive everyone else&rsquo;s share.
       </p>
 
       <WalletBar reason="Connect your wallet to set up a circle." />
@@ -227,8 +274,9 @@ export default function CreatePage() {
             aria-describedby="members-hint"
           />
           <p className="hint" id="members-hint">
-            One wallet address per line, in the order people will be paid. The
-            first person listed is paid first.
+            One person per line, in the order they&rsquo;ll be paid. Put their
+            wallet address first, then their name if you want one — for
+            example, <code>0x1234… Ada</code>.
             {members.length > 0 && (
               <>
                 {" "}

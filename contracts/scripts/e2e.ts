@@ -40,7 +40,7 @@ const CONTRIBUTION_WHOLE = process.env.E2E_CONTRIBUTION ?? "0.10";
 /**
  * On Arc, USDC *is* the native coin: balanceOf() is the native balance
  * truncated from 18 decimals to 6. So gas and contributions are spent from the
- * same pot. A member funded with exactly their rotation total goes short the
+ * same balance. A member funded with exactly their rotation total goes short the
  * moment they pay for their own approve, so fund the rotation plus a buffer.
  */
 const GAS_BUFFER_6DP = "0.05";

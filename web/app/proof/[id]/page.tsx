@@ -9,7 +9,7 @@ import { deploymentFor } from "@/lib/deployments";
 import { addressUrl, txUrl } from "@/lib/explorer";
 import { dateInWords, money, shortAddress } from "@/lib/format";
 import { turnsFromState, useDisbursementLinks, withLinks } from "@/lib/history";
-import { useNames } from "@/lib/people";
+import { useNames, useNamesFromInvite } from "@/lib/people";
 import { ROTA_ABI } from "@/lib/rota";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
 
@@ -76,6 +76,7 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
   const [members, circle] = circleReads.data ?? [];
   const memberList = (members as Address[] | undefined) ?? [];
+  useNamesFromInvite(id);
   const naming = useNames(id, memberList);
 
   const contribution = circle ? (circle[0] as bigint) : 0n;
@@ -107,42 +108,47 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   }
 
   return (
-    <main>
-      <Link href={`/circle/${id}`} className="back">
-        ← Back to the circle
-      </Link>
+    <>
+      <header className="hero">
+        <div className="band-inner">
+          <Link href={`/circle/${id}`} className="back" style={{ color: "var(--on-dark)" }}>
+            ← Back to the circle
+          </Link>
+          <span className="label label-rule">
+            Rota is holding / circle {id} / {deployment.label}
+          </span>
+          <p className="figure">
+            {balance.isLoading || rotaBalance === undefined
+              ? "—"
+              : money(rotaBalance as bigint, decimals as number)}
+            <span className="figure-unit">USDC</span>
+          </p>
+        </div>
+      </header>
 
-      <h1>Rota is holding</h1>
+      <section className="band band-blue">
+        <div className="band-inner">
+          <p className="lede" style={{ marginBottom: 0, fontWeight: 600 }}>
+            Rota never holds anyone&rsquo;s savings. Each person&rsquo;s share
+            goes straight from their wallet to whoever&rsquo;s turn it is, so
+            this number stays at zero — and anyone can check it, at any time,
+            without taking our word for it.
+          </p>
+          <p style={{ marginTop: "1.5rem", marginBottom: 0 }}>
+            <a
+              href={addressUrl(explorer, deployment.rota)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Check it on the explorer
+            </a>
+          </p>
+        </div>
+      </section>
 
-      <p className="hero-figure">
-        {balance.isLoading || rotaBalance === undefined
-          ? "—"
-          : money(rotaBalance as bigint, decimals as number)}
-        <span className="hero-unit">USDC</span>
-      </p>
-
-      <p className="lede" style={{ marginTop: "1rem" }}>
-        Rota never holds anyone&rsquo;s savings. Each person&rsquo;s share goes
-        straight from their wallet to whoever&rsquo;s turn it is, so this number
-        stays at zero — and anyone can check it, at any time, without taking
-        our word for it.
-      </p>
-
-      <div className="card card-quiet">
-        <p className="small muted" style={{ margin: 0 }}>
-          Checked live on {deployment.label} just now.{" "}
-          <a
-            href={addressUrl(explorer, deployment.rota)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            See it for yourself
-          </a>
-          .
-        </p>
-      </div>
-
-      <h2>Who&rsquo;s in this circle</h2>
+      <section className="band band-cream">
+        <div className="band-inner">
+          <span className="label label-rule">01 / Who&rsquo;s in this circle</span>
       {circleReads.isLoading ? (
         <p className="muted">Loading…</p>
       ) : memberList.length === 0 ? (
@@ -176,8 +182,12 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
         </div>
       )}
 
-      {/* Only a circle that exists has a history worth heading. */}
-      {memberList.length > 0 && <h2>What&rsquo;s happened so far</h2>}
+        </div>
+      </section>
+
+      <section className="band band-dark">
+        <div className="band-inner">
+          <span className="label label-rule">02 / What&rsquo;s happened so far</span>
 
       {memberList.length > 0 && rows.length === 0 && (
         <p className="muted">
@@ -232,6 +242,8 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
         </>
       )}
-    </main>
+        </div>
+      </section>
+    </>
   );
 }

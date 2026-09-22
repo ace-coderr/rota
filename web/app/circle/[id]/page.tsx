@@ -27,7 +27,7 @@ import {
   permissionNeeded,
   walletNeeded,
 } from "@/lib/money";
-import { useNames } from "@/lib/people";
+import { useNames, useNamesFromInvite } from "@/lib/people";
 import { ROTA_ABI } from "@/lib/rota";
 import { deploymentFor } from "@/lib/deployments";
 import { useCircle } from "@/lib/useRota";
@@ -60,6 +60,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     isLoading,
   } = useCircle(circleId);
 
+  // Names the organizer put in the invite link arrive in the #fragment,
+  // which never reaches a server and never touches the chain.
+  useNamesFromInvite(id);
   const naming = useNames(id, members);
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [pending, setPending] = useState<string | undefined>();
@@ -86,7 +89,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   const buffer = feeBuffer(gasPrice);
   const contribution = circle?.contribution ?? 0n;
-  const pot = contribution * BigInt(Math.max(0, memberCount - 1));
+  // What the person whose turn it is receives: everyone else's share.
+  // Not a pot — nothing is ever pooled.
+  const payout = contribution * BigInt(Math.max(0, memberCount - 1));
 
   /**
    * The group view asks only what the contract asks: would THIS round fail
@@ -193,7 +198,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   if (!ROTA_ADDRESS || circleId === undefined) {
     return (
-      <main>
+      <main className="sheet">
         <Link href="/" className="back">
           ← Back
         </Link>
@@ -208,7 +213,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   if (isLoading && !circle) {
     return (
-      <main>
+      <main className="sheet">
         <h1>Circle {id}</h1>
         <p className="muted">Loading…</p>
       </main>
@@ -217,7 +222,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   if (circle && memberCount === 0) {
     return (
-      <main>
+      <main className="sheet">
         <Link href="/" className="back">
           ← Back
         </Link>
@@ -300,7 +305,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   if (finished) {
     return (
-      <main>
+      <main className="sheet">
         <Link href="/" className="back">
           ← Back
         </Link>
@@ -322,7 +327,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
             </div>
             <div className="row" style={{ borderBottom: "none" }}>
               <dt>Each person received</dt>
-              <dd>{money(pot, decimals)} USDC</dd>
+              <dd>{money(payout, decimals)} USDC</dd>
             </div>
           </dl>
         </div>
@@ -426,7 +431,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   }
 
   return (
-    <main>
+    <main className="sheet">
       <Link href="/" className="back">
         ← Back
       </Link>
@@ -502,7 +507,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         <div className="notice notice-calm">
           <p className="notice-title">It&rsquo;s your turn.</p>
           <p className="small">
-            You receive {money(pot, decimals)} USDC this round, and you
+            You receive {money(payout, decimals)} USDC this round, and you
             don&rsquo;t pay in.
           </p>
         </div>
@@ -524,7 +529,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           </p>
           <p className="small">
             {standings[cycleIndex]?.name ?? "The next person"} receives{" "}
-            {money(pot, decimals)} USDC then. There&rsquo;s nothing to do until
+            {money(payout, decimals)} USDC then. There&rsquo;s nothing to do until
             then.
           </p>
         </div>
@@ -574,6 +579,45 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       )}
 
       {peopleList}
+
+      {/*
+        The way out. Setting the allowance to zero withdraws Rota's permission
+        entirely — no money moves, and nothing can move afterwards. Plainly
+        labelled, because "revoke your allowance" means nothing to most people.
+      */}
+      {isConnected && isMember && mine?.hasJoined && (
+        <>
+          <hr className="divider" />
+          <h2>Leave this circle</h2>
+          <p>
+            This withdraws Rota&rsquo;s permission to move your money. Your
+            money is not touched — it stays where it is. Nothing further can be
+            taken for this circle unless you join again.
+          </p>
+          <button
+            type="button"
+            className="btn btn-quiet"
+            disabled={busy}
+            onClick={() =>
+              run("leave", {
+                address: USDC_ADDRESS,
+                abi: ERC20_ABI,
+                functionName: "approve",
+                args: [rota, 0n],
+              })
+            }
+          >
+            {pending === "leave"
+              ? "Stopping…"
+              : "Stop Rota from moving your money"}
+          </button>
+          <p className="action-note">
+            The others will see that you have left, and the circle
+            can&rsquo;t settle another round until you rejoin or they remove
+            you.
+          </p>
+        </>
+      )}
 
       <hr className="divider" />
       <Link

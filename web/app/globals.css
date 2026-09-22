@@ -1,45 +1,41 @@
 @import "tailwindcss";
 
 /*
- * Rota's design is deliberately plain. The people using it are trusting it
- * with savings, so it reads like a bank statement: one typeface, one accent,
- * flat surfaces, high contrast, large type. No gradients, no glass, no neon.
+ * Rota has two volumes and one brand.
  *
- * Light only. `color-scheme: light` stops the browser tinting form controls,
- * which is what makes a half-themed app look untrustworthy on a dark device.
+ * EDITORIAL (landing, /proof) — the argument. Giant condensed display type,
+ * numbered sections, monospace micro-labels, bands alternating near-black and
+ * warm cream. This is where someone decides whether to trust it.
+ *
+ * PLAIN (/create, /circle) — the money. Same palette, same typefaces, but laid
+ * out for a 65-year-old holding a phone: 18px floor, one blue button per
+ * screen, and nothing that matters rendered as small grey text.
+ *
+ * The palette is shared so the two never look like different products.
  */
 
 :root {
   color-scheme: light;
 
-  --bg: #ffffff;
-  --surface: #f6f7f6;
-  --border: #d9ddd9;
-  --border-strong: #b6bdb7;
+  --blue: #0a1eff;
+  --blue-deep: #0717c4;
+  --cream: #f0eee9;
+  --cream-dim: #dedad1;
+  --ink: #0a0a0a;
+  --white: #ffffff;
 
-  --ink: #14181a; /* 16.9:1 on white */
-  --ink-soft: #4a5350; /* 8.1:1 on white  */
+  /* On cream/white. 7.9:1 and 16.8:1 respectively. */
+  --on-light: var(--ink);
+  --on-light-soft: #4a4a44;
 
-  --accent: #0e5c4a; /* 7.3:1 on white  */
-  --accent-ink: #ffffff;
-  --accent-wash: #eef3f1;
+  /* On near-black. Never grey — cream at 17.6:1. */
+  --on-dark: var(--cream);
+  --on-dark-soft: #b9b5ab;
 
-  --warn-wash: #fdf6ec;
-  --warn-border: #d9b779;
-  --warn-ink: #6b4a10;
+  --edge: #d3cfc6;
+  --edge-dark: #2a2a28;
 
-  --stop-wash: #fdf0ee;
-  --stop-border: #dba79c;
-  --stop-ink: #7a2d1c;
-
-  --radius: 12px;
-  --gap: 1.5rem;
-}
-
-@theme inline {
-  --color-background: var(--bg);
-  --color-foreground: var(--ink);
-  --font-sans: var(--font-sans-stack);
+  --radius: 4px;
 }
 
 * {
@@ -52,102 +48,285 @@ html {
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--cream);
   color: var(--ink);
-  font-family: var(--font-sans-stack), system-ui, sans-serif;
-  /* 18px floor, per the brief. */
+  font-family: var(--font-body), system-ui, sans-serif;
   font-size: 18px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Numbers must line up in columns. */
 .amount,
+.figure,
 td,
-.stat-value {
+.row dd {
   font-variant-numeric: tabular-nums;
 }
 
-main {
-  width: 100%;
+/* ===================================================================
+   Shared type
+   =================================================================== */
+
+.display {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 0.92;
+  letter-spacing: -0.01em;
+  margin: 0;
+  /* Huge, but never wider than a phone. */
+  font-size: clamp(2.75rem, 13vw, 7rem);
+}
+
+.display-sm {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: 0;
+  margin: 0;
+  font-size: clamp(1.75rem, 7vw, 2.75rem);
+}
+
+/* Monospace micro-label. Always on a high-contrast ground, never decorative
+   grey — these carry section numbers and status, which people need to read. */
+.label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 500;
+  margin: 0 0 1.25rem;
+  display: block;
+}
+
+.label-rule {
+  border-top: 2px solid currentColor;
+  padding-top: 0.75rem;
+}
+
+.lede {
+  font-size: 1.25rem;
+  line-height: 1.5;
   max-width: 34rem;
-  margin: 0 auto;
-  padding: 2rem 1rem 4rem;
-}
-
-h1 {
-  font-size: 1.75rem;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  margin: 0 0 0.5rem;
-}
-
-h2 {
-  font-size: 1.125rem;
-  line-height: 1.35;
-  margin: 2.5rem 0 0.75rem;
-  color: var(--ink);
+  margin: 0 0 2rem;
 }
 
 p {
   margin: 0 0 1rem;
+  max-width: 38rem;
 }
 
-.lede {
-  font-size: 1.0625rem;
-  color: var(--ink-soft);
-  margin-bottom: 2rem;
-}
-
-.muted {
-  color: var(--ink-soft);
-}
-
-.small {
-  font-size: 0.9375rem;
-  line-height: 1.5;
-}
-
+/* Tailwind's preflight strips underlines, which leaves links indistinguishable
+   from body text. Put them back everywhere except the things styled as
+   buttons or nav. */
 a {
-  color: var(--accent);
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
 
-/* ---------------------------------------------------------------- surfaces */
-
-.card {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+a.btn,
+a.back {
+  text-decoration: none;
 }
 
-.card-quiet {
-  background: var(--surface);
-  border-color: transparent;
+.small {
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
-/* The one number that matters on a screen. */
-.hero-figure {
-  font-size: 3.25rem;
-  line-height: 1.05;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
+/* ===================================================================
+   EDITORIAL volume — bands
+   =================================================================== */
+
+.band {
+  padding: 4.5rem 1.25rem;
+}
+
+.band-inner {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.band-dark {
+  background: var(--ink);
+  color: var(--on-dark);
+}
+
+.band-cream {
+  background: var(--cream);
+  color: var(--ink);
+}
+
+.band-blue {
+  background: var(--blue);
+  color: var(--white);
+}
+
+.band-dark .label,
+.band-blue .label {
+  color: inherit;
+}
+
+.band-cream .label {
+  color: var(--blue);
+}
+
+.band-dark a,
+.band-blue a {
+  color: inherit;
+}
+
+/* The editorial hero: type doing the work, no imagery. */
+.hero {
+  padding: 3.5rem 1.25rem 4rem;
+  background: var(--ink);
+  color: var(--on-dark);
+}
+
+.hero .display em {
+  font-style: normal;
+  color: var(--blue);
+}
+
+/* A number that is the whole point of the screen. */
+.figure {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  line-height: 0.85;
+  letter-spacing: -0.02em;
+  font-size: clamp(5rem, 34vw, 13rem);
   margin: 0;
 }
 
-.hero-unit {
-  font-size: 1.25rem;
-  color: var(--ink-soft);
-  margin-left: 0.25rem;
-  letter-spacing: 0;
+.figure-unit {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: clamp(0.875rem, 3.5vw, 1.25rem);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  display: block;
+  margin-top: 1rem;
 }
 
-/* --------------------------------------------------------------- key/value */
+/* Numbered editorial list */
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.step {
+  border-top: 1px solid currentColor;
+  padding: 1.5rem 0;
+  display: grid;
+  grid-template-columns: 3rem 1fr;
+  gap: 1rem;
+}
+
+.step:last-child {
+  border-bottom: 1px solid currentColor;
+}
+
+.step-n {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.1em;
+  padding-top: 0.35rem;
+}
+
+.step-body h3 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-size: 1.375rem;
+  line-height: 1.1;
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+}
+
+.step-body p {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+/* ===================================================================
+   PLAIN volume — the money screens
+   =================================================================== */
+
+.plain {
+  background: var(--cream);
+  min-height: 100vh;
+}
+
+main.sheet {
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 5rem;
+}
+
+.sheet h1 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  font-size: clamp(2rem, 9vw, 2.75rem);
+  margin: 0 0 0.75rem;
+}
+
+.sheet h2 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.01em;
+  margin: 2.75rem 0 1rem;
+}
+
+.sheet .lede {
+  font-size: 1.125rem;
+  color: var(--on-light);
+}
+
+/* Cards are white on cream, so edges read without relying on shadow. */
+.card {
+  background: var(--white);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.card-flat {
+  background: transparent;
+  border-color: var(--edge);
+}
+
+/* The one figure on a money screen. Big, black, never grey. */
+.sum {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.75rem, 14vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sum-unit {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.9375rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-left: 0.5rem;
+}
+
+/* ---------------------------------------------------------- key/value */
 
 .rows {
-  border-top: 1px solid var(--border);
+  margin: 0;
 }
 
 .row {
@@ -157,59 +336,76 @@ a {
   justify-content: space-between;
   align-items: baseline;
   padding: 0.875rem 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--edge);
+}
+
+.row:last-child {
+  border-bottom: none;
 }
 
 .row dt,
 .row-label {
-  color: var(--ink-soft);
   font-size: 1rem;
+  color: var(--on-light-soft);
 }
 
 .row dd,
 .row-value {
   margin: 0;
   text-align: right;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-/* ----------------------------------------------------------------- actions */
+/* ------------------------------------------------------------ actions */
 
 .btn {
   display: block;
   width: 100%;
-  min-height: 3.5rem;
-  padding: 0.875rem 1.25rem;
+  min-height: 3.75rem;
+  padding: 1rem 1.25rem;
+  border: 2px solid var(--blue);
   border-radius: var(--radius);
-  border: 1px solid transparent;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font: inherit;
-  font-weight: 600;
-  font-size: 1.0625rem;
+  background: var(--blue);
+  color: var(--white);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.125rem;
   cursor: pointer;
   text-align: center;
+  text-decoration: none;
 }
 
 .btn:hover:not(:disabled) {
-  background: #0a4839;
+  background: var(--blue-deep);
+  border-color: var(--blue-deep);
 }
 
 .btn:disabled {
-  background: var(--surface);
-  color: var(--ink-soft);
-  border-color: var(--border);
+  background: var(--cream-dim);
+  border-color: var(--cream-dim);
+  color: #5d5a53;
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: var(--bg);
-  color: var(--accent);
-  border-color: var(--border-strong);
+  background: transparent;
+  color: var(--blue);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background: var(--accent-wash);
+  background: rgba(10, 30, 255, 0.07);
+}
+
+/* A deliberate, non-alarming way out. Bordered, not filled: it is not the
+   thing most people came to do, but it must never look hidden. */
+.btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.btn-quiet:hover:not(:disabled) {
+  background: rgba(10, 10, 10, 0.06);
 }
 
 .btn-link {
@@ -217,75 +413,81 @@ a {
   width: auto;
   min-height: 0;
   padding: 0;
-  background: none;
   border: none;
-  color: var(--accent);
+  background: none;
+  color: var(--blue);
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   text-decoration: underline;
   text-underline-offset: 3px;
   cursor: pointer;
 }
 
+.btn + .btn,
+.btn + .action-note + .btn {
+  margin-top: 0.75rem;
+}
+
 :where(a, button, input, textarea, select):focus-visible {
-  outline: 3px solid var(--accent);
+  outline: 3px solid var(--blue);
   outline-offset: 2px;
 }
 
-/* The explanation that sits under the one action on a screen. */
 .action-note {
   font-size: 1rem;
-  color: var(--ink-soft);
-  margin: 0.75rem 0 0;
+  color: var(--on-light);
+  margin: 0.875rem 0 0;
 }
 
-/* ------------------------------------------------------------------- forms */
+/* -------------------------------------------------------------- forms */
 
 label {
   display: block;
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 0.375rem;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  margin-bottom: 0.5rem;
 }
 
 .field {
-  margin-bottom: 1.75rem;
+  margin-bottom: 2rem;
 }
 
 .hint {
-  font-size: 0.9375rem;
-  color: var(--ink-soft);
-  margin: 0.375rem 0 0;
+  font-size: 1rem;
+  color: var(--on-light-soft);
+  margin: 0.5rem 0 0;
 }
 
 input[type="text"],
+input[type="email"],
 input:not([type]),
 textarea,
 select {
   width: 100%;
-  font: inherit;
-  font-size: 1.0625rem;
-  padding: 0.75rem 0.875rem;
-  border: 1px solid var(--border-strong);
+  font-family: inherit;
+  font-size: 1.125rem;
+  padding: 0.875rem 1rem;
+  border: 2px solid var(--ink);
   border-radius: var(--radius);
-  background: var(--bg);
+  background: var(--white);
   color: var(--ink);
 }
 
 textarea {
-  min-height: 8rem;
+  min-height: 9rem;
   resize: vertical;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 1rem;
 }
 
-/* ------------------------------------------------------------------ notices */
+/* ------------------------------------------------------------ notices */
 
 .notice {
-  border: 1px solid var(--border);
-  border-left-width: 4px;
+  border: 2px solid var(--ink);
   border-radius: var(--radius);
-  padding: 1rem 1.125rem;
-  margin: 1rem 0;
-  background: var(--surface);
+  padding: 1.125rem;
+  margin: 1.25rem 0;
+  background: var(--white);
 }
 
 .notice p {
@@ -297,34 +499,34 @@ textarea {
 }
 
 .notice-title {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.125rem;
 }
 
 .notice-wait {
-  background: var(--warn-wash);
-  border-color: var(--warn-border);
-  color: var(--warn-ink);
+  border-color: var(--ink);
+  background: #fbf3e2;
 }
 
 .notice-stop {
-  background: var(--stop-wash);
-  border-color: var(--stop-border);
-  color: var(--stop-ink);
+  border-color: #a3200f;
+  background: #fdeeea;
+  color: #5e1408;
 }
 
 .notice-calm {
-  background: var(--accent-wash);
-  border-color: var(--accent);
+  border-color: var(--blue);
+  background: #eceeff;
 }
 
-/* ------------------------------------------------------------------ people */
+/* ------------------------------------------------------------- people */
 
 .person {
   display: flex;
   gap: 0.875rem;
   align-items: baseline;
-  padding: 0.875rem 0;
-  border-bottom: 1px solid var(--border);
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--edge);
 }
 
 .person:last-child {
@@ -332,78 +534,105 @@ textarea {
 }
 
 .person-turn {
-  flex: 0 0 2rem;
-  color: var(--ink-soft);
+  flex: 0 0 1.75rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.9375rem;
+  color: var(--on-light-soft);
 }
 
 .person-name {
-  font-weight: 500;
+  font-weight: 700;
+  font-size: 1.0625rem;
 }
 
 .person-detail {
-  font-size: 0.9375rem;
-  color: var(--ink-soft);
+  font-size: 1rem;
+  color: var(--on-light-soft);
 }
 
 .person-status {
   margin-left: auto;
   text-align: right;
-  font-size: 0.9375rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   white-space: nowrap;
 }
 
 .tag-paid {
-  color: var(--accent);
-  font-weight: 600;
+  color: var(--blue);
+  font-weight: 700;
 }
 
 .tag-now {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border-radius: 999px;
-  padding: 0.125rem 0.625rem;
-  font-size: 0.875rem;
-  font-weight: 600;
+  background: var(--blue);
+  color: var(--white);
+  padding: 0.2rem 0.6rem;
+  font-weight: 700;
 }
 
 .tag-short {
-  color: var(--stop-ink);
-  font-weight: 600;
+  color: #a3200f;
+  font-weight: 700;
 }
 
-/* An address is a technical detail: present, quiet, never the headline. */
+/* An address is a technical detail. Present, quiet, never the headline —
+   but still 1rem, because people do check them. */
 .address {
-  font-size: 0.8125rem;
-  color: var(--ink-soft);
-  letter-spacing: 0.02em;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.9375rem;
+  color: var(--on-light-soft);
   word-break: break-all;
 }
 
-/* ------------------------------------------------------------------ layout */
-
-.stack > * + * {
-  margin-top: var(--gap);
-}
-
-.divider {
-  border: 0;
-  border-top: 1px solid var(--border);
-  margin: 2rem 0;
+.muted {
+  color: var(--on-light-soft);
 }
 
 .back {
   display: inline-block;
-  font-size: 1rem;
-  margin-bottom: 1.5rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--blue);
+  margin-bottom: 1.75rem;
 }
 
-@media (min-width: 40rem) {
-  main {
-    padding: 3rem 1.5rem 5rem;
+.divider {
+  border: 0;
+  border-top: 1px solid var(--edge);
+  margin: 2.5rem 0;
+}
+
+/* Invite link, meant to be copied. */
+.share {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.9375rem;
+  background: var(--white);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius);
+  padding: 0.875rem 1rem;
+  word-break: break-all;
+  margin-bottom: 0.75rem;
+}
+
+@media (min-width: 48rem) {
+  .band {
+    padding: 6rem 2rem;
   }
 
-  h1 {
-    font-size: 2.125rem;
+  .hero {
+    padding: 5rem 2rem 6rem;
+  }
+
+  main.sheet {
+    padding: 2.5rem 1.5rem 6rem;
+  }
+
+  .step {
+    grid-template-columns: 5rem 1fr;
+    gap: 2rem;
   }
 }

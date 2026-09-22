@@ -5,9 +5,10 @@ A rotating savings circle, settled in USDC on [Arc](https://arc.network).
 > **Unaudited — use small amounts.**
 
 A group agrees on an amount and a schedule: every round, each member puts in the
-same amount, and one member receives the whole pot. The turn passes down the
-list each round until everyone has been paid exactly once, at which point every
-member has put in and taken out the same total.
+same amount, and one member receives everyone else's share. The turn passes
+down the list each round until everyone has been paid exactly once, at which
+point every member has put in and taken out the same total. Nothing is ever
+pooled: there is no pot, only shares moving directly between wallets.
 
 ## The invariant
 
@@ -38,7 +39,7 @@ floor(native / 1e12)  61810136484
 
 That means members hold one asset. They do not need a separate gas token to
 take part, and they cannot be stranded holding contributions they are unable to
-send. It also means the two are spent from the same pot, which the app accounts
+send. It also means the two are spent from the same balance, which the app accounts
 for: a member is shown one figure covering their share and the network cost
 together, never two.
 

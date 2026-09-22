@@ -17,7 +17,8 @@ import { ROTA_ABI } from "./rota";
  *
  * Contract state has no such limit. `getMembers` and `getCircle` are two
  * constant-cost calls that work on any RPC with no key, and between them they
- * say everything that actually happened: turn i paid members[i] the pot, and
+ * say everything that actually happened: turn i paid members[i] everyone
+ * else's share, and
  * cycleIndex says how many turns are done. Logs are used only to decorate that
  * with a transaction link, and are allowed to fail.
  */
@@ -39,13 +40,14 @@ export function turnsFromState(
 ): Turn[] {
   if (!members || members.length === 0) return [];
 
-  const pot = contribution * BigInt(Math.max(0, members.length - 1));
+  // Everyone else's share, paid straight to whoever's turn it is.
+  const payout = contribution * BigInt(Math.max(0, members.length - 1));
   const completed = Math.max(0, Math.min(cycleIndex, members.length));
 
   return Array.from({ length: completed }, (_, index) => ({
     index,
     recipient: members[index],
-    amount: pot,
+    amount: payout,
   }));
 }
 
