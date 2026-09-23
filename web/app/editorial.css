@@ -108,7 +108,7 @@
   border: 1px solid var(--blue);
   color: var(--white);
   background: var(--blue);
-  border-radius: 2px;
+  border-radius: 0;
   white-space: nowrap;
 }
 
@@ -121,7 +121,9 @@
   color: var(--ink);
   border: 1px solid var(--ink);
   padding: 1rem;
-  border-radius: 2px;
+  /* Square, like the buttons inside it and the chip beside it. Nothing that
+     sits next to a button gets a corner radius the button does not have. */
+  border-radius: 0;
 
   /* A cream panel hanging off a near-black navbar: it inherits the dark
      surface's ring and wash, both of which vanish on cream. */
