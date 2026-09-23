@@ -10,8 +10,14 @@ import { shortAddress } from "@/lib/format";
 import { USDC_ADDRESS } from "@/lib/usdc";
 
 const GITHUB = "https://github.com/ace-coderr/rota";
-const SOURCIFY =
-  "https://sourcify.dev/server/repo-ui/5042/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf";
+/*
+ * Derived, not hardcoded. This was pinned to a contract address literal and
+ * went on pointing at the superseded deployment after the redeploy — a
+ * "verified source" link that shows you a different contract is worse than no
+ * link at all.
+ */
+const sourcifyUrl = (chainId: number, address: string) =>
+  `https://sourcify.dev/server/v2/contract/${chainId}/${address}`;
 
 export function SiteFooter() {
   // Prefer mainnet when it is configured: that is the contract people's money
@@ -78,11 +84,17 @@ export function SiteFooter() {
                 "Contract not deployed"
               )}
             </li>
-            <li>
-              <a href={SOURCIFY} target="_blank" rel="noreferrer">
-                Verified source
-              </a>
-            </li>
+            {deployment && (
+              <li>
+                <a
+                  href={sourcifyUrl(deployment.chain.id, deployment.rota)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Verified source
+                </a>
+              </li>
+            )}
           </ul>
         </div>
 

@@ -4,11 +4,9 @@ A rotating savings circle, settled in USDC on [Arc](https://arc.network).
 
 > **Unaudited — use small amounts.**
 >
-> **The high-severity allowance finding is fixed, and live on testnet.** A
-> member now has to `join(circleId)` explicitly, and money only moves for
-> circles they joined. **Mainnet is still running the vulnerable contract** —
-> until it is replaced, keep your allowance no larger than your current circle
-> needs and revoke it when a circle finishes. See
+> The high-severity allowance finding is **fixed and deployed on both chains**.
+> A member has to `join(circleId)` explicitly, and money only moves for circles
+> they joined. The attack was re-run against the live contract and blocked; see
 > [Review status](#review-status).
 
 A group agrees on an amount and a schedule: every round, each member puts in the
@@ -60,21 +58,26 @@ round is a single transaction. The 20-member round below settled in one block.
 | network | chain | address |
 | --- | --- | --- |
 | Arc testnet | `5042002` | [`0xe0b354e9251d81ce957262db1c93e9c56f85b3ba`](https://explorer.testnet.arc.io/address/0xe0b354e9251d81ce957262db1c93e9c56f85b3ba) — block 63651642 |
-| Arc mainnet | `5042` | not yet deployed |
+| Arc mainnet | `5042` | [`0x34a646ab823e3352291f74c886cf624c9ebc1dea`](https://explorer.arc.io/address/0x34a646ab823e3352291f74c886cf624c9ebc1dea) — block 22409417 |
 
 ### Superseded
 
 | Chain | Address | Why |
 | --- | --- | --- |
-| Arc testnet | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 | allowance reuse |
-| Arc mainnet | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 | allowance reuse |
+| Arc testnet | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 | allowance reuse — 4 circles, testnet only |
+| Arc mainnet | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 | allowance reuse — **0 circles, never used** |
 
 Both predate the consent fix and carry the vulnerability described under
-[Review status](#review-status). They are kept here rather than deleted: they
-hold real circles, they are what the verified sources on Sourcify correspond
-to, and a deployment record that quietly drops its own history is worth
-nothing. **Do not point a wallet at them.** The mainnet one is still what the
-production app uses until its replacement is deployed.
+[Review status](#review-status). **Do not point a wallet at them.**
+
+Nobody was ever exposed on mainnet: `circleCount` on the superseded mainnet
+contract reads 0, so no circle was created on it and no allowance was ever
+granted to it. The four circles on the superseded testnet contract are play
+money.
+
+They are kept here rather than deleted. They are what the verified sources on
+Sourcify correspond to, and a deployment record that quietly drops its own
+history is worth nothing.
 
 USDC is the predeploy at `0x3600000000000000000000000000000000000000` on both,
 6 decimals, read from the token rather than assumed.
@@ -92,19 +95,32 @@ deployed runtime bytecode matches a local build byte for byte apart from the
 five immutable slots holding the USDC address.
 
 Source is verified on
-[Sourcify](https://sourcify.dev/server/repo-ui/5042/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf).
+[Sourcify](https://sourcify.dev/server/v2/contract/5042/0x34a646ab823e3352291f74c886cf624c9ebc1dea).
 Verification through explorer.arc.io's own API is not currently possible from a
 script — the endpoint sits behind a bot challenge that returns 403 — so the
 explorer shows the contract unverified until someone submits it through the web
 form. Regenerate the standard JSON input for that form with:
 
 ```bash
-npm run build:contracts   # then read artifacts/build-info/*.json -> .input
+node --experimental-strip-types scripts/verify.ts 5042 0x34a646ab823e3352291f74c886cf624c9ebc1dea
 ```
 
-Compiler settings for the form: solc `0.8.24`, optimizer enabled with 200 runs,
-EVM version `shanghai`, constructor argument
-`0x3600000000000000000000000000000000000000`.
+That submits to Sourcify and then tries the explorer, and it is also how the
+standard JSON input at [`contracts/audit/Rota.standard-input.json`](contracts/audit/Rota.standard-input.json)
+is kept current. For the explorer's web form:
+
+| field | value |
+| --- | --- |
+| compiler | `v0.8.24+commit.e11b9ed9` |
+| contract name | `project/contracts/Rota.sol:Rota` |
+| optimizer | enabled, 200 runs |
+| EVM version | `shanghai` |
+| constructor argument | `0x3600000000000000000000000000000000000000` |
+
+The contract name needs the `project/` prefix: Hardhat 3 keys its own sources
+that way and dependencies under `npm/`, and a mismatch is reported as
+"Contract not found in compiler output", which reads like a compiler problem
+rather than a path problem.
 
 ### Custody, checked on real receipts
 
@@ -234,9 +250,25 @@ USDC, then `join` on Rota. That is the price of a token that cannot scope an
 allowance to a purpose.
 
 `contracts/test/AllowanceReuse.poc.t.ts` is kept as a regression test. It runs
-the identical attack and asserts it fails, with Alice's balance *and* her
+the identical attack and asserts it fails, with the victim's balance *and* her
 allowance intact. Before the fix its first assertion — "Alice paid 100 USDC
 into a circle she never joined" — passed.
+
+And it was re-run against the deployed bytecode, not only in memory.
+`contracts/scripts/live-attack.ts` gives a victim a real allowance standing
+behind a real circle they joined, then has a second wallet build a circle
+naming them:
+
+```
+victim joined the attack circle? false
+start() reverted: NotJoined
+names the victim: yes
+
+victim balance:   17.73379 USDC -> 17.73379 USDC
+victim allowance: 0.05 USDC -> 0.05 USDC
+```
+
+Nothing moved, and the victim's genuine circle can still settle.
 
 Slither still reports `arbitrary-send-erc20` on `disburse`, and that is now a
 false positive: the detector fires on any `transferFrom` whose `from` is not
@@ -250,7 +282,14 @@ theft between users, not a drain of the contract.
 ### Tests
 
 26 tests, `npm test --prefix contracts`, including the five regression tests
-above.
+above, plus a full end-to-end circle on the live testnet contract — create,
+approve, join, start, three disburses — with Rota's USDC balance read as 0 at
+every cycle and Rota never an endpoint of a transfer.
+
+```bash
+ROTA_ADDRESS=0x… npx hardhat run scripts/e2e.ts --network arcTestnet
+ROTA_ADDRESS=0x… node --experimental-strip-types scripts/live-attack.ts
+```
 
 The core claim — **"Rota never holds USDC"** — is mutation-tested: the original
 balance-based assertion passed against a deliberately custodial implementation,
