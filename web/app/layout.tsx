@@ -25,10 +25,47 @@ const mono = IBM_Plex_Mono({
   display: "swap",
 });
 
+const TITLE = "Rota — savings circles where nobody holds the pot";
+const DESCRIPTION =
+  "Everyone puts in the same amount each round and one person receives everyone's share, until everyone has had a turn. Each share moves straight from one wallet to another, so nothing is ever pooled and Rota never holds your money.";
+
+/*
+ * title.template gives every other page its own name in a tab and in a link
+ * preview; the site name alone on all of them tells nobody anything.
+ *
+ * The Open Graph and Twitter images are not listed here. Next finds
+ * app/opengraph-image.tsx by convention and writes the og:image tags itself,
+ * with the absolute URL and the dimensions filled in — naming them again by
+ * hand is how a card ends up pointing at a file that no longer exists.
+ */
+/*
+ * og:image has to be an absolute URL, so Next needs to know the site's
+ * origin. Vercel supplies it at build time, which means link previews work on
+ * production without anyone adding a variable; NEXT_PUBLIC_SITE_URL overrides
+ * it for a custom domain. Undefined locally, where it does not matter.
+ */
+const origin =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : undefined);
+
 export const metadata: Metadata = {
-  title: "Rota — save together",
-  description:
-    "A savings circle where everyone takes a turn. Your money stays in your own wallet until it is your turn to be paid.",
+  metadataBase: origin ? new URL(origin) : undefined,
+  title: { default: TITLE, template: "%s — Rota" },
+  description: DESCRIPTION,
+  applicationName: "Rota",
+  openGraph: {
+    type: "website",
+    siteName: "Rota",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
