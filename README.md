@@ -217,7 +217,34 @@ contracts/   Hardhat 3 + TypeScript, Solidity 0.8.24
   scripts/probe.ts             connectivity, via the ERC-20 interface
   scripts/probe-raw.ts         raw JSON-RPC, no Hardhat, no assumptions
 web/         Next.js App Router + wagmi + viem
+  lib/mark.ts                  the logo, as numbers
+  components/Logo.tsx          mark, horizontal lockup, stacked lockup
+  scripts/gen-icon.ts          writes app/icon.svg from lib/mark.ts
+  assets/                      TrueType faces for the Open Graph card
 ```
+
+## The mark
+
+Eight seats on a circle: seven hollow, one solid. The solid seat is whose turn
+it is, and it sits at the top right rather than on an axis of symmetry, so the
+ring reads as part-way round rather than parked.
+
+Every drawing of it — the navbar lockup, the footer mark, the favicon, the
+Apple touch icon, the Open Graph card — is generated from the geometry in
+`web/lib/mark.ts`, so none of them can drift. The wordmark's optical alignment
+is measured from the Oswald instance the app actually loads, not from the
+foundry's figures; `web/assets/README.md` explains why that distinction bit.
+
+`app/icon.svg` has to be a literal file, so it is generated rather than
+hand-kept. After changing the geometry:
+
+```bash
+npm run icon --prefix web
+```
+
+Checked at 16, 32 and 64px by rasterising the real `icon.svg` and measuring
+the ink in each seat: at 16px the solid seat still carries 1.38x the ink of a
+hollow one, and the seven hollow seats agree within 1%.
 
 ## License
 
