@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAccount, useDisconnect, useSwitchChain } from "wagmi";
 
 import { Button } from "@/components/Button";
-import { DEFAULT_DEPLOYMENT, deploymentFor } from "@/lib/deployments";
+import { DEFAULT_DEPLOYMENT, DEPLOYMENTS, deploymentFor } from "@/lib/deployments";
 import { addressUrl } from "@/lib/explorer";
 import { shortAddress } from "@/lib/format";
 import { useCircleWallet } from "@/lib/wallet/circle";
@@ -12,18 +12,20 @@ import { useCircleWallet } from "@/lib/wallet/circle";
 /**
  * The one wallet control: a single bordered box reading
  *
- *   [ • Arc | 0x8557…8F69 ]
+ *   [ • arc · testnet | 0x8557…8F69 ]
  *
  * rather than a chip and a button that happened to sit next to each other.
+ *
+ * The network is always named. "Arc" on its own does not say whether the money
+ * is real, which is the single most important thing about a chain, and it is
+ * the one mistake here that cannot be undone.
  *
  * The address keeps its original casing. Checksummed hex encodes information
  * in its capitals — uppercasing it destroys the checksum and makes two
  * different addresses look alike, so the `text-transform: uppercase` that the
  * rest of the mono micro-type uses is explicitly cancelled here.
  *
- * On a chain Rota is not deployed on, the dot and the border turn amber and
- * the label says so. That is the only state where the control offers a fourth
- * item, because otherwise there is no way out of it from the navbar.
+ * On a chain Rota is not deployed on, the dot and the border turn amber.
  */
 export function WalletControl({
   onConnectClick,
@@ -78,8 +80,11 @@ export function WalletControl({
     );
   }
 
-  const label = wrongNetwork ? "Wrong network" : (active ?? target)?.label ?? "Arc";
-  const explorer = (active ?? target)?.explorer;
+  const shownChain = active ?? target;
+  const explorer = shownChain?.explorer;
+  // Always name the network. "Arc" alone does not say whether the money is
+  // real, which is the single most important thing about a chain.
+  const network = wrongNetwork ? undefined : shownChain?.network;
 
   return (
     <div className="wallet" ref={root}>
@@ -91,7 +96,12 @@ export function WalletControl({
         onClick={() => setOpen((v) => !v)}
       >
         <span className="wallet-dot" aria-hidden="true" />
-        <span className="wallet-chain">{label}</span>
+        <span className="wallet-chain">arc</span>
+        {network ? (
+          <span className="wallet-net">· {network}</span>
+        ) : (
+          <span className="wallet-net">· unknown network</span>
+        )}
         <span className="wallet-rule" aria-hidden="true" />
         <span className="wallet-addr">
           {copied ? "Copied" : shown ? shortAddress(shown) : "Signed in"}
@@ -100,18 +110,36 @@ export function WalletControl({
 
       {open && (
         <div className="wallet-menu" role="menu">
-          {wrongNetwork && target && (
-            <button
-              type="button"
-              role="menuitem"
-              className="wallet-item"
-              onClick={() => {
-                switchChain({ chainId: target.chain.id });
-                setOpen(false);
-              }}
-            >
-              Switch to {target.label}
-            </button>
+          {/*
+            Switching is always offered, not only when the wallet is on a
+            chain Rota is not on. Moving between testnet and mainnet is a
+            thing people do deliberately, and hiding it behind an error state
+            means the only way to reach testnet is to first get lost.
+          */}
+          {DEPLOYMENTS.length > 0 && (
+            <div className="wallet-group">
+              <span className="wallet-group-label">Switch network</span>
+              {DEPLOYMENTS.map((d) => {
+                const current = active?.chain.id === d.chain.id;
+                return (
+                  <button
+                    key={d.chain.id}
+                    type="button"
+                    role="menuitem"
+                    className="wallet-item wallet-item-net"
+                    aria-current={current || undefined}
+                    disabled={current}
+                    onClick={() => {
+                      switchChain({ chainId: d.chain.id });
+                      setOpen(false);
+                    }}
+                  >
+                    <span>arc · {d.network}</span>
+                    {current && <span className="wallet-tick" aria-label="current">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
           )}
           <button
             type="button"

@@ -3,11 +3,18 @@
 import Link from "next/link";
 
 import { Button } from "@/components/Button";
-import { useState } from "react";
-import { isAddress, parseUnits, type Address } from "viem";
-import { useAccount, usePublicClient } from "wagmi";
+import { useState, useSyncExternalStore } from "react";
+import { formatUnits, parseUnits, type Address } from "viem";
+import { useAccount, useGasPrice, usePublicClient } from "wagmi";
 
 import { ErrorNotice } from "@/components/ErrorNotice";
+import {
+  MAX_MEMBERS,
+  MemberRows,
+  newRow,
+  rowProblem,
+  type Row,
+} from "@/components/MemberRows";
 import { WalletBar } from "@/components/WalletBar";
 import {
   classifyTxError,
@@ -23,6 +30,8 @@ import {
 import { ConfigNotice } from "@/components/ConfigNotice";
 import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { useUsdcDecimals } from "@/lib/useRota";
+import { feeBuffer } from "@/lib/money";
+import { everyInWords } from "@/lib/format";
 import { inviteLink } from "@/lib/people";
 
 const FREQUENCIES = [
@@ -30,6 +39,26 @@ const FREQUENCIES = [
   { label: "Every two weeks", seconds: "1209600" },
   { label: "Every month", seconds: "2592000" },
 ];
+
+/*
+ * The clock, read once when this module loads in the browser.
+ *
+ * The schedule is written out in real dates, and a clock read during render
+ * disagrees with the one the server did. useSyncExternalStore is how the rest
+ * of this codebase reads browser-only state: the server snapshot is undefined,
+ * the client snapshot is a constant, so it never loops and never mismatches.
+ */
+const LOADED_AT = Date.now();
+const subscribeNever = () => () => {};
+
+const onDay = (at: Date) =>
+  at.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+
+const ordinal = (n: number) => {
+  const rest = n % 100;
+  if (rest >= 11 && rest <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+};
 
 export default function CreatePage() {
   const { chainId } = useAccount();
@@ -39,59 +68,63 @@ export default function CreatePage() {
   const deployment = deploymentFor(chainId);
   const publicClient = usePublicClient({ chainId: deployment?.chain.id });
 
+  const { data: gasPrice } = useGasPrice({ chainId: deployment?.chain.id });
+
   const [amount, setAmount] = useState("");
   const [period, setPeriod] = useState(FREQUENCIES[0].seconds);
-  const [membersText, setMembersText] = useState("");
+  const [rows, setRows] = useState<Row[]>(() => [newRow(), newRow()]);
+
+  const now = useSyncExternalStore(
+    subscribeNever,
+    () => LOADED_AT as number | undefined,
+    () => undefined,
+  );
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [circleId, setCircleId] = useState<bigint | undefined>();
   const [working, setWorking] = useState(false);
   const [copied, setCopied] = useState(false);
 
   /**
-   * One person per line: an address, optionally followed by their name.
    * Names never leave this browser — they travel to the other members in the
    * invite link's #fragment, which is not sent to any server and never
    * touches the chain.
    */
-  const entries = membersText
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [first, ...rest] = line.split(/[\s,]+/);
-      return { address: first, name: rest.join(" ").trim() };
-    });
-
+  const entries = rows
+    .map((row) => ({ address: row.address.trim(), name: row.name.trim() }))
+    .filter((entry) => entry.address !== "");
   const members = entries.map((entry) => entry.address);
+  const you = wallet.address;
 
-  const invalid = members.filter((m) => !isAddress(m));
-  const duplicates = [
-    ...new Set(
-      members.filter(
-        (m, i) =>
-          members.findIndex((o) => o.toLowerCase() === m.toLowerCase()) !== i,
-      ),
-    ),
-  ];
+  const amountValid =
+    /^\d+(\.\d{1,6})?$/.test(amount.trim()) && Number(amount) > 0;
 
-  const amountValid = /^\d+(\.\d{1,6})?$/.test(amount.trim()) && Number(amount) > 0;
-  const touched = membersText.trim() !== "";
+  // Every row judges itself, in place. A single list of failures at the foot
+  // of a form makes you count rows to work out which one it means.
+  const rowsClean = rows.every((_, i) => rowProblem(rows, i, you) === undefined);
+  const enoughPeople = members.length >= 2;
+  const youAreIn =
+    you === undefined ||
+    members.some((m) => m.toLowerCase() === you.toLowerCase());
 
-  const problems: string[] = [];
-  if (touched && members.length < 2) {
-    problems.push("A circle needs at least two people.");
-  }
-  if (members.length > 20) {
-    problems.push(`A circle can have up to 20 people. You've listed ${members.length}.`);
-  }
-  if (invalid.length) {
-    problems.push(
-      `${invalid.length} of these isn't a valid wallet address. Each one starts with 0x and is 42 characters long.`,
-    );
-  }
-  if (duplicates.length) {
-    problems.push("Someone is listed twice. Each person can only appear once.");
-  }
+  /** What one person has to hold to see the whole circle through. */
+  const perPerson =
+    amountValid && decimals !== undefined && enoughPeople
+      ? parseUnits(amount.trim(), decimals) * BigInt(members.length - 1) +
+        feeBuffer(gasPrice)
+      : undefined;
+
+  const periodSeconds = Number(period);
+  const firstPayout =
+    now !== undefined ? new Date(now + periodSeconds * 1000) : undefined;
+  const lastPayout =
+    now !== undefined && enoughPeople
+      ? new Date(now + periodSeconds * 1000 * members.length)
+      : undefined;
+
+  const myTurn = you
+    ? members.findIndex((m) => m.toLowerCase() === you.toLowerCase()) + 1
+    : 0;
+
 
   const ROTA_ADDRESS = deployment?.rota;
   const networkFailure =
@@ -102,8 +135,10 @@ export default function CreatePage() {
     isConnected &&
     !networkFailure &&
     amountValid &&
-    members.length >= 2 &&
-    problems.length === 0 &&
+    enoughPeople &&
+    members.length <= MAX_MEMBERS &&
+    rowsClean &&
+    youAreIn &&
     decimals !== undefined &&
     Boolean(ROTA_ADDRESS) &&
     !working;
@@ -251,25 +286,50 @@ export default function CreatePage() {
       <WalletBar reason="Connect your wallet to set up a circle." />
 
       <form onSubmit={onSubmit}>
-        <div className="field">
-          <label htmlFor="amount">How much does each person put in?</label>
-          <input
-            id="amount"
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            placeholder="50.00"
-            aria-describedby="amount-hint"
-          />
-          <p className="hint" id="amount-hint">
-            In USDC, each round.
-            {amount.trim() !== "" && !amountValid && (
-              <> Enter an amount like 50 or 50.00.</>
-            )}
-          </p>
-        </div>
+        {/* ------------------------------------------------ 01 the money */}
+        <section className="step">
+          <span className="step-n">01 — The money</span>
 
-        <div className="field">
+          <label htmlFor="amount">How much does each person put in?</label>
+          <div className="input-suffix">
+            <input
+              id="amount"
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="50.00"
+              aria-describedby="amount-hint"
+            />
+            <span aria-hidden="true">USDC each round</span>
+          </div>
+
+          <p className="hint" id="amount-hint">
+            {amount.trim() !== "" && !amountValid
+              ? "Enter an amount like 50 or 50.00."
+              : "In USDC, every round."}
+          </p>
+
+          {perPerson !== undefined && decimals !== undefined && (
+            <p className="step-live">
+              Each person needs about{" "}
+              <strong>
+                {Number(formatUnits(perPerson, decimals)).toLocaleString(
+                  undefined,
+                  { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                )}{" "}
+                USDC
+              </strong>{" "}
+              in their wallet to finish the circle — {members.length - 1}{" "}
+              {members.length - 1 === 1 ? "round" : "rounds"} of {amount.trim()},
+              plus the network charge.
+            </p>
+          )}
+        </section>
+
+        {/* --------------------------------------------- 02 the schedule */}
+        <section className="step">
+          <span className="step-n">02 — The schedule</span>
+
           <label htmlFor="period">How often?</label>
           <select
             id="period"
@@ -282,40 +342,71 @@ export default function CreatePage() {
               </option>
             ))}
           </select>
-        </div>
 
-        <div className="field">
-          <label htmlFor="members">Who&rsquo;s in the circle?</label>
-          <textarea
-            id="members"
-            value={membersText}
-            onChange={(e) => setMembersText(e.target.value)}
-            placeholder={"0x…\n0x…\n0x…"}
-            aria-describedby="members-hint"
-          />
-          <p className="hint" id="members-hint">
-            One person per line, in the order they&rsquo;ll be paid. Put their
-            wallet address first, then their name if you want one — for
-            example, <code>0x1234… Ada</code>.
-            {members.length > 0 && (
-              <>
-                {" "}
-                <strong>
-                  {members.length} {members.length === 1 ? "person" : "people"}{" "}
-                  so far.
-                </strong>
-              </>
-            )}
+          {firstPayout && (
+            <p className="step-live">
+              First payout <strong>{onDay(firstPayout)}</strong>, then{" "}
+              {everyInWords(BigInt(period))}
+              {lastPayout ? (
+                <>
+                  {" "}
+                  until <strong>{onDay(lastPayout)}</strong>.
+                </>
+              ) : (
+                "."
+              )}
+            </p>
+          )}
+        </section>
+
+        {/* ------------------------------------------------ 03 who's in */}
+        <section className="step">
+          <span className="step-n">03 — Who’s in</span>
+          <p className="hint" style={{ margin: "0 0 1rem" }}>
+            In the order they’ll be paid. You can paste a whole list into any
+            address box.
           </p>
-        </div>
 
-        {touched && problems.length > 0 && (
-          <div className="notice notice-wait" role="alert">
-            {problems.map((problem) => (
-              <p key={problem} className="small">
-                {problem}
-              </p>
-            ))}
+          <MemberRows rows={rows} setRows={setRows} you={you} />
+
+          {members.length > 0 && (
+            <div className="order">
+              <span className="order-label">Payout order</span>
+              <ol>
+                {entries.map((entry, i) => (
+                  <li key={`${entry.address}-${i}`}>
+                    {entry.name ||
+                      (you && entry.address.toLowerCase() === you.toLowerCase()
+                        ? "You"
+                        : `${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`)}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+
+          {!enoughPeople && members.length > 0 && (
+            <p className="row-problem" role="alert">
+              A circle needs at least two people.
+            </p>
+          )}
+          {!youAreIn && members.length > 0 && (
+            <p className="row-problem" role="alert">
+              Your own address isn’t in the list. You have to be in the circle
+              to start it.
+            </p>
+          )}
+        </section>
+
+        {/* ------------------------------------------------ the summary */}
+        {ready && (
+          <div className="summary">
+            <span>
+              {members.length} people
+            </span>
+            <span>{amount.trim()} USDC each</span>
+            <span>{everyInWords(BigInt(period))}</span>
+            {myTurn > 0 && <span>you’re paid {ordinal(myTurn)}</span>}
           </div>
         )}
 

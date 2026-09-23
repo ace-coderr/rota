@@ -18,6 +18,11 @@ export type Deployment = {
   isTestnet: boolean;
   /** What to call it in front of a person. */
   label: string;
+  /**
+   * Which network, always named. "Arc" alone does not say whether the money
+   * is real, and that is the single most important thing about a chain.
+   */
+  network: "mainnet" | "testnet";
 };
 
 function build(
@@ -35,6 +40,7 @@ function build(
     explorer: chain.blockExplorers?.default.url ?? "",
     isTestnet,
     label,
+    network: isTestnet ? "testnet" : "mainnet",
   };
 }
 

@@ -222,45 +222,6 @@ a.back {
 }
 
 /* Numbered editorial list */
-.steps {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.step {
-  border-top: 1px solid currentColor;
-  padding: 1.5rem 0;
-  display: grid;
-  grid-template-columns: 3rem 1fr;
-  gap: 1rem;
-}
-
-.step:last-child {
-  border-bottom: 1px solid currentColor;
-}
-
-.step-n {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.875rem;
-  letter-spacing: 0.1em;
-  padding-top: 0.35rem;
-}
-
-.step-body h3 {
-  font-family: var(--font-display), system-ui, sans-serif;
-  text-transform: uppercase;
-  font-size: 1.375rem;
-  line-height: 1.1;
-  margin: 0 0 0.5rem;
-  font-weight: 700;
-}
-
-.step-body p {
-  margin: 0;
-  font-size: 1.0625rem;
-}
-
 /* ===================================================================
    PLAIN volume — the money screens
    =================================================================== */
@@ -470,9 +431,30 @@ a.btn-secondary {
   background: var(--btn-wash);
 }
 
-.btn:disabled {
+/*
+ * Disabled is its own state, not a faded active one. A primary button at 45%
+ * opacity is washed-out purple on cream and reads as broken rather than as
+ * "not yet" — people try to press it and conclude the site is failing.
+ *
+ * Both variants collapse to the same inert treatment: no fill, a muted
+ * hairline, muted text. The geometry is unchanged, so nothing moves when a
+ * button becomes available.
+ */
+.btn:disabled,
+a.btn:disabled {
+  background: transparent;
+  border-color: var(--edge);
+  color: var(--on-light-soft);
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 1;
+}
+
+/* On a near-black surface the same idea needs the other end of the ramp. */
+.band-dark .btn:disabled,
+.nav .btn:disabled,
+.foot .btn:disabled {
+  border-color: var(--edge-dark);
+  color: var(--on-dark-soft);
 }
 
 /* Colour comes from the surface: see --focus-ring at the top of this file. */
@@ -650,6 +632,249 @@ textarea {
   color: var(--on-light-soft);
 }
 
+/* -------------------------------------------------------------- steps */
+
+/*
+ * /create is three decisions, not four fields. Each one gets its own bordered
+ * panel with a number, so the page reads as a sequence with an end rather
+ * than a stack you scroll until it stops.
+ */
+.step {
+  border: 1px solid var(--edge);
+  background: var(--white);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.step-n {
+  display: block;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+  margin-bottom: 0.875rem;
+}
+
+/* A line that answers the question the field just asked. */
+.step-live {
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0.875rem 0 0;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--edge);
+}
+
+/* An amount and its unit share one box, so the unit cannot be mistaken for
+   part of the value. */
+.input-suffix {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--ink);
+}
+
+.input-suffix input {
+  border: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.input-suffix input:focus-visible {
+  outline-offset: -2px;
+}
+
+.input-suffix > span {
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  border-left: 1px solid var(--edge);
+  background: var(--cream);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  color: var(--on-light-soft);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------- member rows */
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+/*
+ * On a phone the up/down/remove column costs 104px out of 335, which left an
+ * address field 145px wide. The tools drop under the fields instead, so the
+ * address gets the whole width.
+ */
+.row {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  gap: 0.5rem 0.625rem;
+  align-items: start;
+  width: 100%;
+}
+
+@media (min-width: 30rem) {
+  .row {
+    grid-template-columns: 1.5rem 1fr auto;
+  }
+}
+
+.row-n {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  color: var(--on-light-soft);
+  padding-top: 1.1rem;
+}
+
+.row-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@media (min-width: 30rem) {
+  .row-fields {
+    flex-direction: row;
+  }
+
+  /*
+   * Both fields need an explicit flex, not just the address one. The global
+   * input rule sets width: 100%, which becomes the flex basis for any field
+   * that does not override it — so the name box claimed the whole row and the
+   * address, sitting on a basis of 0, shrank to 34px.
+   */
+  .row-fields input {
+    flex: 1;
+  }
+
+  /* Qualified with the element, or `.row-fields input` above outranks it and
+     the address ends up the same width as the optional name. */
+  .row-fields input.row-addr {
+    flex: 1.6;
+  }
+}
+
+.row-fields input {
+  min-height: 48px;
+  font-size: 1rem;
+  min-width: 0;
+}
+
+.row-addr {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+}
+
+.row-addr.is-wrong {
+  border-color: var(--warn);
+}
+
+.row-tools {
+  display: flex;
+  gap: 0.25rem;
+  grid-column: 2;
+}
+
+@media (min-width: 30rem) {
+  .row-tools {
+    grid-column: auto;
+  }
+}
+
+.row-btn {
+  width: 32px;
+  height: 48px;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.row-btn:hover:not(:disabled) {
+  background: var(--btn-wash);
+}
+
+.row-btn:disabled {
+  color: var(--edge);
+  cursor: not-allowed;
+}
+
+.row-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Grid column 2 onward, so a message lines up under the field it is about. */
+.row-problem,
+.row-note {
+  grid-column: 2 / -1;
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.row-problem {
+  color: var(--warn);
+}
+
+.row-note {
+  color: var(--on-light-soft);
+}
+
+.order {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--edge);
+}
+
+.order-label {
+  display: block;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+  margin-bottom: 0.5rem;
+}
+
+.order ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 1rem;
+}
+
+.order li {
+  padding: 0.125rem 0;
+}
+
+/* Everything the button is about to do, on one line. */
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  border: 1px solid var(--ink);
+  background: var(--cream);
+  padding: 0.875rem 1rem;
+  margin-bottom: 0.75rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  letter-spacing: 0.03em;
+}
+
+.summary > span + span::before {
+  content: "·";
+  margin-right: 0.75rem;
+  color: var(--on-light-soft);
+}
+
 /* ------------------------------------------------------------ notices */
 
 .notice {
@@ -803,10 +1028,5 @@ textarea {
     padding-left: 1.5rem;
     padding-right: 1.5rem;
     padding-bottom: 6rem;
-  }
-
-  .step {
-    grid-template-columns: 5rem 1fr;
-    gap: 2rem;
   }
 }

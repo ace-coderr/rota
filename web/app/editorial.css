@@ -235,12 +235,23 @@
   flex: none;
 }
 
+/* Lowercase on purpose: it is a machine name, not a proper noun. */
 .wallet-chain {
   font-family: var(--font-display), system-ui, sans-serif;
   font-weight: 500;
   font-size: 0.9375rem;
   letter-spacing: 0.02em;
+  text-transform: lowercase;
   white-space: nowrap;
+}
+
+.wallet-net {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  margin-left: -0.25rem;
+  opacity: 0.75;
 }
 
 .wallet-rule {
@@ -305,6 +316,42 @@
 
 .wallet-item:last-child {
   border-bottom: 0;
+}
+
+.wallet-group {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--edge);
+}
+
+.wallet-group-label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--on-light-soft);
+  padding: 0.625rem 0.875rem 0.25rem;
+}
+
+.wallet-item-net {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+}
+
+/* The network you are already on is marked, not offered. */
+.wallet-item-net:disabled {
+  cursor: default;
+  opacity: 1;
+  font-weight: 500;
+}
+
+.wallet-tick {
+  color: var(--blue);
 }
 
 .wallet-item:hover:not(:disabled) {
