@@ -54,12 +54,10 @@
   border-bottom-color: rgba(240, 238, 233, 0.22);
 }
 
+/* Holds the lockup, which draws itself in currentColor. */
 .nav-mark {
-  font-family: var(--font-display), system-ui, sans-serif;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
   color: var(--cream);
   text-decoration: none;
   margin-right: auto;

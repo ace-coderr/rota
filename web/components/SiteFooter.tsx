@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 
+import { RotaMark } from "@/components/Logo";
+
 import { DEFAULT_DEPLOYMENT, mainnetDeployment } from "@/lib/deployments";
 import { addressUrl } from "@/lib/explorer";
 import { shortAddress } from "@/lib/format";
@@ -20,9 +22,7 @@ export function SiteFooter() {
     <footer className="foot grain">
       <div className="foot-grid">
         <div>
-          <span className="nav-mark" style={{ marginRight: 0 }}>
-            Rota
-          </span>
+          <RotaMark size={40} />
           <p style={{ marginTop: "0.75rem", maxWidth: "22rem" }}>
             A savings circle where everyone takes a turn. Your money stays in
             your own wallet until it&rsquo;s your turn to be paid.

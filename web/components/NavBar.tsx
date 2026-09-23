@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 
+import { RotaWordmark } from "@/components/Logo";
 import { WalletBar } from "@/components/WalletBar";
 import { DEFAULT_DEPLOYMENT, deploymentFor } from "@/lib/deployments";
 import { shortAddress } from "@/lib/format";
@@ -40,8 +41,8 @@ export function NavBar() {
 
   return (
     <nav className={`nav ${scrolled ? "nav-solid" : ""}`}>
-      <Link href="/" className="nav-mark">
-        Rota
+      <Link href="/" className="nav-mark" aria-label="Rota, home">
+        <RotaWordmark size={26} label="" />
       </Link>
 
       <div className="nav-links">
