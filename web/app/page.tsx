@@ -5,9 +5,7 @@ import { useReadContracts } from "wagmi";
 
 import { Button } from "@/components/Button";
 import { CircleRing } from "@/components/CircleRing";
-import { NavBar } from "@/components/NavBar";
 import { CountUp, Reveal } from "@/components/Reveal";
-import { SiteFooter } from "@/components/SiteFooter";
 import { DEFAULT_DEPLOYMENT, mainnetDeployment } from "@/lib/deployments";
 import { addressUrl } from "@/lib/explorer";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
@@ -50,7 +48,6 @@ export default function Home() {
 
   return (
     <>
-      <NavBar />
 
       {/* ---------------------------------------------------------- hero */}
       <header
@@ -223,7 +220,7 @@ export default function Home() {
 
           <Reveal>
             <p className="figure" style={{ marginBottom: "1rem" }}>
-              {reads.isLoading ? "—" : <CountUp value={heldNumber} />}
+              {reads.isLoading ? "—" : <CountUp value={heldNumber} />}{" "}
               <span className="figure-unit">
                 USDC · {deployment?.label ?? "Arc"}
               </span>
@@ -304,7 +301,6 @@ export default function Home() {
         </div>
       </section>
 
-      <SiteFooter />
     </>
   );
 }

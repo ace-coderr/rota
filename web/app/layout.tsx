@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Oswald, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
+import { NavBar } from "@/components/NavBar";
+import { SiteFooter } from "@/components/SiteFooter";
 import { Providers } from "./providers";
 
 // Three families, one job each: condensed display, readable body, monospace
@@ -75,7 +77,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${display.variable} ${body.variable} ${mono.variable}`}
     >
       <body>
-        <Providers>{children}</Providers>
+        {/*
+          The shell lives here, not in each page. /create and /circle used to
+          render neither, which made them look like a different site reached
+          by accident.
+        */}
+        <Providers>
+          <NavBar />
+          {children}
+          <SiteFooter />
+        </Providers>
       </body>
     </html>
   );

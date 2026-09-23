@@ -46,6 +46,12 @@
    */
   --focus-ring: var(--blue);
   --btn-wash: rgba(10, 10, 10, 0.08);
+  /* A chain Rota is not deployed on. Dark surfaces lighten it; see nav. */
+  --warn: #9a5b00;
+
+  /* The fixed navbar's real height, hairline included: 36px control + 2 x
+     0.875rem padding + 1px border. Wider screens pad it to 69px. */
+  --nav-h: 65px;
 }
 
 * {
@@ -264,11 +270,22 @@ a.back {
   min-height: 100vh;
 }
 
+/*
+ * The measure for a money screen: 35rem, centred, with real air under the
+ * fixed navbar. Before the shell moved into the root layout these pages had
+ * no navbar to clear and started 1.5rem from the top of the window.
+ */
 main.sheet {
   width: 100%;
-  max-width: 32rem;
+  max-width: 35rem;
   margin: 0 auto;
-  padding: 1.5rem 1.25rem 5rem;
+  padding: calc(var(--nav-h) + 2.5rem) 1.25rem 5rem;
+}
+
+@media (min-width: 48rem) {
+  main.sheet {
+    padding-top: calc(var(--nav-h) + 4rem);
+  }
 }
 
 .sheet h1 {
@@ -299,7 +316,7 @@ main.sheet {
 .card {
   background: var(--white);
   border: 1px solid var(--edge);
-  border-radius: var(--radius);
+  border-radius: 0;
   padding: 1.25rem;
   margin-bottom: 1.25rem;
 }
@@ -524,19 +541,46 @@ label {
   margin: 0.5rem 0 0;
 }
 
+/*
+ * One control style. Inputs and the select were different heights with
+ * different borders, and the select carried whatever arrow the platform felt
+ * like drawing — on Windows a grey chevron in a grey box, which looked like a
+ * different widget from a different decade.
+ *
+ * 56px matches the lg button, and the hairline matches the button system, so
+ * a form and its submit are visibly the same kit.
+ */
 input[type="text"],
 input[type="email"],
 input:not([type]),
 textarea,
 select {
   width: 100%;
+  min-height: 56px;
   font-family: inherit;
   font-size: 1.125rem;
-  padding: 0.875rem 1rem;
-  border: 2px solid var(--ink);
-  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--ink);
+  border-radius: 0;
   background: var(--white);
   color: var(--ink);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* Our own chevron, drawn once, in the ink colour. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 3rem;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='9' viewBox='0 0 14 9' fill='none'><path d='M1 1l6 6 6-6' stroke='%230a0a0a' stroke-width='1.5' stroke-linecap='square'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
 }
 
 textarea {
@@ -544,13 +588,73 @@ textarea {
   resize: vertical;
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 1rem;
+  line-height: 1.5;
+}
+
+/*
+ * Who you are signed in as: a bordered strip, not a line of grey text
+ * floating between the heading and the form. The address keeps its casing —
+ * see WalletControl for why that matters.
+ */
+.signed-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--edge);
+  background: var(--white);
+  padding: 0.75rem 1rem;
+  margin: 0 0 1.75rem;
+  font-size: 1rem;
+}
+
+.signed-strip .addr {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  text-transform: none;
+  font-size: 0.9375rem;
+}
+
+/* A card that should not compete with the form below it. */
+.card-quiet {
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 0;
+  padding: 1.25rem;
+  margin-bottom: 1.75rem;
+}
+
+/*
+ * One figure and its unit. .hero-unit previously had no rule at all, which is
+ * why the page read "1.01USDC in total" — an unstyled inline span sits flush
+ * against the number before it.
+ */
+.hero-figure {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 9vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-unit {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-weight: 400;
+  font-size: 0.875rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: block;
+  margin-top: 0.5rem;
+  color: var(--on-light-soft);
 }
 
 /* ------------------------------------------------------------ notices */
 
 .notice {
-  border: 2px solid var(--ink);
-  border-radius: var(--radius);
+  border: 1px solid var(--ink);
+  border-radius: 0;
   padding: 1.125rem;
   margin: 1.25rem 0;
   background: var(--white);
@@ -693,8 +797,12 @@ textarea {
     padding: 5rem 2rem 6rem;
   }
 
+  /* Top padding is owned by the rule that clears the fixed navbar; setting
+     the shorthand here quietly put the page back under the bar. */
   main.sheet {
-    padding: 2.5rem 1.5rem 6rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-bottom: 6rem;
   }
 
   .step {

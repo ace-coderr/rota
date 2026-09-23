@@ -71,8 +71,11 @@ export function WalletBar({ reason }: { reason?: string }) {
           </div>
         )}
 
-        <p className="small muted" style={{ marginBottom: "1.5rem" }}>
-          Signed in as {shown ? shortAddress(shown) : ""}{" "}
+        <div className="signed-strip">
+          <span>
+            Signed in as{" "}
+            <span className="addr">{shown ? shortAddress(shown) : ""}</span>
+          </span>
           <button
             type="button"
             className="text-action"
@@ -80,7 +83,7 @@ export function WalletBar({ reason }: { reason?: string }) {
           >
             Sign out
           </button>
-        </p>
+        </div>
       </>
     );
   }

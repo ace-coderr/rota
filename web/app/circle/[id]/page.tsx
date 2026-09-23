@@ -528,7 +528,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
             To finish the circle you&rsquo;ll need
           </p>
           <p className="hero-figure">
-            {money(myTotal, decimals)}
+            {money(myTotal, decimals)}{" "}
             <span className="hero-unit">USDC in total</span>
           </p>
           <p className="small muted" style={{ margin: "0.5rem 0 0" }}>

@@ -5,8 +5,6 @@ import { use } from "react";
 import { useAccount, useReadContracts } from "wagmi";
 import type { Address } from "viem";
 
-import { NavBar } from "@/components/NavBar";
-import { SiteFooter } from "@/components/SiteFooter";
 import { NOTHING_CONFIGURED, deploymentFor } from "@/lib/deployments";
 import { ConfigNotice } from "@/components/ConfigNotice";
 import { addressUrl, txUrl } from "@/lib/explorer";
@@ -123,7 +121,6 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
   return (
     <>
-      <NavBar />
       <header className="hero grain" style={{ paddingTop: "6.5rem" }}>
         <div className="band-inner">
           <Link href={`/circle/${id}`} className="back" style={{ color: "var(--on-dark)" }}>
@@ -135,7 +132,7 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
           <p className="figure">
             {balance.isLoading || rotaBalance === undefined
               ? "—"
-              : money(rotaBalance as bigint, decimals as number)}
+              : money(rotaBalance as bigint, decimals as number)}{" "}
             <span className="figure-unit">USDC</span>
           </p>
         </div>
@@ -260,7 +257,6 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
         </div>
       </section>
 
-      <SiteFooter />
     </>
   );
 }
