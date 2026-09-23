@@ -10,42 +10,42 @@ Summary
 Impact: High
 Confidence: High
  - [ ] ID-0
-[Rota.disburse(uint256)](contracts/Rota.sol#L180-L221) uses arbitrary from in transferFrom: [usdc.safeTransferFrom(member,recipient,contribution)](contracts/Rota.sol#L216)
+[Rota.disburse(uint256)](contracts/Rota.sol#L232-L281) uses arbitrary from in transferFrom: [usdc.safeTransferFrom(member,recipient,contribution)](contracts/Rota.sol#L276)
 
-contracts/Rota.sol#L180-L221
+contracts/Rota.sol#L232-L281
 
 
 ## calls-loop
 Impact: Low
 Confidence: Medium
  - [ ] ID-1
-[Rota.previewRound(uint256)](contracts/Rota.sol#L234-L281) has external calls inside a loop: [balance = usdc.balanceOf(member)](contracts/Rota.sol#L263)
+[Rota.start(uint256)](contracts/Rota.sol#L197-L221) has external calls inside a loop: [allowed = usdc.allowance(member,address(this))](contracts/Rota.sol#L211)
 
-contracts/Rota.sol#L234-L281
+contracts/Rota.sol#L197-L221
 
 
  - [ ] ID-2
-[Rota.start(uint256)](contracts/Rota.sol#L149-L169) has external calls inside a loop: [allowed = usdc.allowance(member,address(this))](contracts/Rota.sol#L159)
+[Rota.previewRound(uint256)](contracts/Rota.sol#L294-L346) has external calls inside a loop: [allowed = usdc.allowance(member,address(this))](contracts/Rota.sol#L322)
 
-contracts/Rota.sol#L149-L169
+contracts/Rota.sol#L294-L346
 
 
  - [ ] ID-3
-[Rota.previewRound(uint256)](contracts/Rota.sol#L234-L281) has external calls inside a loop: [allowed = usdc.allowance(member,address(this))](contracts/Rota.sol#L262)
+[Rota.previewRound(uint256)](contracts/Rota.sol#L294-L346) has external calls inside a loop: [balance = usdc.balanceOf(member)](contracts/Rota.sol#L323)
 
-contracts/Rota.sol#L234-L281
+contracts/Rota.sol#L294-L346
 
 
 ## timestamp
 Impact: Low
 Confidence: Medium
  - [ ] ID-4
-[Rota.disburse(uint256)](contracts/Rota.sol#L180-L221) uses timestamp for comparisons
+[Rota.disburse(uint256)](contracts/Rota.sol#L232-L281) uses timestamp for comparisons
 	Dangerous comparisons:
-	- [block.timestamp < circle.nextDueAt](contracts/Rota.sol#L188)
-	- [block.timestamp >= circle.nextDueAt + circle.period](contracts/Rota.sol#L205)
+	- [block.timestamp < circle.nextDueAt](contracts/Rota.sol#L240)
+	- [block.timestamp >= circle.nextDueAt + circle.period](contracts/Rota.sol#L257)
 
-contracts/Rota.sol#L180-L221
+contracts/Rota.sol#L232-L281
 
 
 ## assembly

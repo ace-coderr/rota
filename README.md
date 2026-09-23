@@ -4,10 +4,12 @@ A rotating savings circle, settled in USDC on [Arc](https://arc.network).
 
 > **Unaudited — use small amounts.**
 >
-> **Known high-severity finding, unfixed.** An allowance granted to Rota can be
-> spent by any circle, including one a stranger creates naming you. See
-> [Review status](#review-status). Keep your allowance no larger than your
-> current circle needs, and revoke it when a circle finishes.
+> **The high-severity allowance finding is fixed in this source.** A member now
+> has to `join(circleId)` explicitly, and money only moves for circles they
+> joined. The fix is **not yet deployed** — the addresses below still run the
+> vulnerable contract. Until they are replaced, keep your allowance no larger
+> than your current circle needs and revoke it when a circle finishes. See
+> [Review status](#review-status).
 
 A group agrees on an amount and a schedule: every round, each member puts in the
 same amount, and one member receives everyone else's share. The turn passes
@@ -57,8 +59,17 @@ round is a single transaction. The 20-member round below settled in one block.
 
 | network | chain | address |
 | --- | --- | --- |
-| Arc testnet | `5042002` | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 |
-| Arc mainnet | `5042` | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 |
+| Arc testnet | `5042002` | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 — **deprecated** |
+| Arc mainnet | `5042` | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 — **deprecated** |
+
+Both addresses above predate the consent fix and carry the allowance-reuse
+vulnerability described under [Review status](#review-status). They are kept
+here rather than deleted: they hold real circles, they are what the verified
+sources on Sourcify correspond to, and a deployment record that quietly drops
+its own history is worth nothing. Do not point a wallet at them.
+
+Replacements are not yet deployed. When they are, they go in this table above
+the deprecated pair, with their own blocks.
 
 USDC is the predeploy at `0x3600000000000000000000000000000000000000` on both,
 6 decimals, read from the token rather than assumed.
@@ -195,28 +206,46 @@ Rota has **not** had a professional audit. What it has had:
 Full output and a finding-by-finding analysis, including why three are accepted
 and one is a false positive, is in [`contracts/audit/`](contracts/audit/).
 
-### The one that is real
+### The one that was real, and the fix
 
-**An allowance granted to Rota is spendable by any circle.** An ERC-20
+**An allowance granted to Rota was spendable by any circle.** An ERC-20
 allowance is granted to the contract, not to a circle; `createCircle` is
-permissionless and never asks the people it names whether they agreed; and
-`start` can only check that an allowance is large enough, not what it was meant
-for. A stranger can therefore create a circle naming someone who already has an
-allowance, put themselves first in the rotation, and take one contribution.
+permissionless and never asked the people it named whether they agreed; and
+`start` could only check that an allowance was large enough, not what it was
+meant for. A stranger could therefore create a circle naming someone who
+already had an allowance, put themselves first in the rotation, and take one
+contribution. Cost to the attacker: gas.
 
-It is demonstrated end to end by `contracts/test/AllowanceReuse.poc.t.ts`,
-which passes. The fix — recording consent per circle instead of inferring it
-from a token allowance — is written out in
-[`contracts/audit/FINDINGS.md`](contracts/audit/FINDINGS.md). It is **not
-applied**: the contract is deployed and immutable, so fixing it means deploying
-a new one and moving the app across, which is an owner's decision.
+**Fixed.** `join(circleId)` records consent per circle. `start` refuses, naming
+the person, if anyone has not joined; `disburse` re-checks at the transfer
+itself, so the guard sits where the violation would happen rather than relying
+on an earlier function having run. `previewRound` reports consent, so the app
+reads it instead of inferring it from an allowance — which was the same flawed
+inference that made the attack work.
 
-The custody invariant is unaffected. Rota still never holds USDC; this is theft
-between users, not a drain of the contract.
+The cost is one storage read per paying member (20-member `disburse` went from
+427,136 to 470,463 gas) and a second confirmation when joining: `approve` on
+USDC, then `join` on Rota. That is the price of a token that cannot scope an
+allowance to a purpose.
+
+`contracts/test/AllowanceReuse.poc.t.ts` is kept as a regression test. It runs
+the identical attack and asserts it fails, with Alice's balance *and* her
+allowance intact. Before the fix its first assertion — "Alice paid 100 USDC
+into a circle she never joined" — passed.
+
+Slither still reports `arbitrary-send-erc20` on `disburse`, and that is now a
+false positive: the detector fires on any `transferFrom` whose `from` is not
+`msg.sender`, which is exactly how a contract moves money without ever holding
+it. It is left unsuppressed, because the honest answer is not "this detector is
+wrong" but "this call is safe, and here is the test that says so".
+
+The custody invariant was never affected. Rota has never held USDC; this was
+theft between users, not a drain of the contract.
 
 ### Tests
 
-21 tests, `npm test --prefix contracts`, plus the proof-of-concept above.
+26 tests, `npm test --prefix contracts`, including the five regression tests
+above.
 
 The core claim — **"Rota never holds USDC"** — is mutation-tested: the original
 balance-based assertion passed against a deliberately custodial implementation,

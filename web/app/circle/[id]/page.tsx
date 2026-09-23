@@ -135,7 +135,12 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     const needed = balanceForNext(index);
     const permission = permissionForNext(index);
     const blocked = blockedMembers.some((b) => sameAddress(b, status.member));
-    const hasJoined = status.allowance >= permission;
+    /*
+     * Joining is one thing a person does and two transactions underneath:
+     * approve on USDC, then join on Rota. Either half missing means they have
+     * not finished, so the circle should still be waiting for them.
+     */
+    const hasJoined = status.joined && status.allowance >= permission;
     const hasEnough = status.balance >= needed;
 
     /**
@@ -200,7 +205,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   async function run(
     label: string,
-    call: Parameters<typeof wallet.send>[0],
+    ...calls: Parameters<typeof wallet.send>[0][]
   ) {
     setFailure(undefined);
     if (networkFailure) {
@@ -210,7 +215,15 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
     setPending(label);
     try {
-      await wallet.send(call, deployment!.chain.id);
+      /*
+       * In order, and stopping at the first failure. Joining is an approve on
+       * USDC followed by a join on Rota; sending the join after a failed
+       * approve would record consent for a circle that cannot collect, which
+       * reads to everyone else as ready when it is not.
+       */
+      for (const call of calls) {
+        await wallet.send(call, deployment!.chain.id);
+      }
       await refetchAll();
     } catch (error) {
       setFailure(
@@ -431,12 +444,21 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           block
           disabled={busy}
           onClick={() =>
-            run("join", {
-              address: USDC_ADDRESS,
-              abi: ERC20_ABI,
-              functionName: "approve",
-              args: [rota, iOwe],
-            })
+            run(
+              "join",
+              {
+                address: USDC_ADDRESS,
+                abi: ERC20_ABI,
+                functionName: "approve",
+                args: [rota, iOwe],
+              },
+              {
+                address: rota,
+                abi: ROTA_ABI,
+                functionName: "join",
+                args: [circleId],
+              },
+            )
           }
         >
           {pending === "join" ? "Joining…" : "Join this circle"}
@@ -444,8 +466,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       );
       actionNote = (
         <>
-          This lets Rota move your share to each person on their turn. Your
-          money stays in your wallet until then.
+          Two confirmations: one giving permission for your share, one saying
+          you are in this circle. Your money stays in your wallet until your
+          turn comes round.
         </>
       );
     } else if (!started && everyoneReady && isMember) {

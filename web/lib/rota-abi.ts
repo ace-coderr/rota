@@ -83,6 +83,17 @@ export const ROTA_ABI = [
     "type": "error"
   },
   {
+    "inputs": [
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "NotJoined",
+    "type": "error"
+  },
+  {
     "inputs": [],
     "name": "NotStarted",
     "type": "error"
@@ -216,6 +227,25 @@ export const ROTA_ABI = [
       }
     ],
     "name": "Disbursed",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "uint256",
+        "name": "circleId",
+        "type": "uint256"
+      },
+      {
+        "indexed": true,
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "Joined",
     "type": "event"
   },
   {
@@ -393,6 +423,30 @@ export const ROTA_ABI = [
         "internalType": "uint256",
         "name": "circleId",
         "type": "uint256"
+      },
+      {
+        "internalType": "address",
+        "name": "member",
+        "type": "address"
+      }
+    ],
+    "name": "hasJoined",
+    "outputs": [
+      {
+        "internalType": "bool",
+        "name": "",
+        "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "circleId",
+        "type": "uint256"
       }
     ],
     "name": "isComplete",
@@ -404,6 +458,19 @@ export const ROTA_ABI = [
       }
     ],
     "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "circleId",
+        "type": "uint256"
+      }
+    ],
+    "name": "join",
+    "outputs": [],
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -432,6 +499,11 @@ export const ROTA_ABI = [
             "internalType": "uint256",
             "name": "balance",
             "type": "uint256"
+          },
+          {
+            "internalType": "bool",
+            "name": "joined",
+            "type": "bool"
           },
           {
             "internalType": "bool",

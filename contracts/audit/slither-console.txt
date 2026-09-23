@@ -4,18 +4,18 @@ Multiple frameworks detected: solc, Solc-json. Using solc (highest priority). Us
 'solc --version' running
 'solc @openzeppelin/=node_modules/@openzeppelin/ contracts/Rota.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,C:\Users\ACE CODER\Desktop\ace\hackathons\rota\contracts\contracts' running
 
-Rota.disburse(uint256) (contracts/Rota.sol#180-221) uses arbitrary from in transferFrom: usdc.safeTransferFrom(member,recipient,contribution) (contracts/Rota.sol#216)
+Rota.disburse(uint256) (contracts/Rota.sol#232-281) uses arbitrary from in transferFrom: usdc.safeTransferFrom(member,recipient,contribution) (contracts/Rota.sol#276)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#arbitrary-from-in-transferfrom
 
-Rota.start(uint256) (contracts/Rota.sol#149-169) has external calls inside a loop: allowed = usdc.allowance(member,address(this)) (contracts/Rota.sol#159)
-Rota.previewRound(uint256) (contracts/Rota.sol#234-281) has external calls inside a loop: allowed = usdc.allowance(member,address(this)) (contracts/Rota.sol#262)
-Rota.previewRound(uint256) (contracts/Rota.sol#234-281) has external calls inside a loop: balance = usdc.balanceOf(member) (contracts/Rota.sol#263)
+Rota.start(uint256) (contracts/Rota.sol#197-221) has external calls inside a loop: allowed = usdc.allowance(member,address(this)) (contracts/Rota.sol#211)
+Rota.previewRound(uint256) (contracts/Rota.sol#294-346) has external calls inside a loop: allowed = usdc.allowance(member,address(this)) (contracts/Rota.sol#322)
+Rota.previewRound(uint256) (contracts/Rota.sol#294-346) has external calls inside a loop: balance = usdc.balanceOf(member) (contracts/Rota.sol#323)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
 
-Rota.disburse(uint256) (contracts/Rota.sol#180-221) uses timestamp for comparisons
+Rota.disburse(uint256) (contracts/Rota.sol#232-281) uses timestamp for comparisons
 	Dangerous comparisons:
-	- block.timestamp < circle.nextDueAt (contracts/Rota.sol#188)
-	- block.timestamp >= circle.nextDueAt + circle.period (contracts/Rota.sol#205)
+	- block.timestamp < circle.nextDueAt (contracts/Rota.sol#240)
+	- block.timestamp >= circle.nextDueAt + circle.period (contracts/Rota.sol#257)
 Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
 
 SafeERC20._safeTransfer(IERC20,address,uint256,bool) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#176-200) uses assembly

@@ -23,7 +23,8 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
  *
  * There is no collateral, no slashing, no penalty and no pause. A member's
  * only exposure is the allowance they choose to grant, which they can revoke
- * at any time directly on the USDC contract.
+ * at any time directly on the USDC contract - and it is only ever spendable
+ * by a circle they have explicitly joined. See {_joined}.
  *
  * On Arc, `usdc` is the ERC-20 predeploy at
  * 0x3600000000000000000000000000000000000000 with 6 decimals. All amounts in
@@ -47,6 +48,8 @@ contract Rota is ReentrancyGuard {
         address member;
         uint256 allowance;
         uint256 balance;
+        /// @notice Whether this member has called {join} for this circle.
+        bool joined;
         bool ready;
     }
 
@@ -66,12 +69,27 @@ contract Rota is ReentrancyGuard {
 
     mapping(uint256 => Circle) private _circles;
 
+    /**
+     * @notice Who has agreed to be in which circle.
+     *
+     * @dev This is the whole point of {join}. An ERC-20 allowance is granted to
+     * this CONTRACT, not to a circle, and the token has nowhere to record what
+     * it was meant for. Without consent recorded here, anyone could call
+     * {createCircle} naming a member who already holds an allowance from some
+     * other circle, put themselves first in the rotation and settle one cycle
+     * - taking a contribution from someone who never agreed to anything.
+     * Checking that an allowance is large enough cannot tell the two cases
+     * apart, because the allowance looks identical either way.
+     */
+    mapping(uint256 => mapping(address => bool)) private _joined;
+
     event CircleCreated(
         uint256 indexed circleId,
         address[] members,
         uint256 contribution,
         uint64 period
     );
+    event Joined(uint256 indexed circleId, address indexed member);
     event Started(uint256 indexed circleId, uint64 nextDueAt);
     event Disbursed(
         uint256 indexed circleId,
@@ -96,6 +114,7 @@ contract Rota is ReentrancyGuard {
         uint256 allowance,
         uint256 required
     );
+    error NotJoined(address member);
     error NotDue(uint256 timestamp, uint64 nextDueAt);
     error CircleComplete();
 
@@ -141,10 +160,39 @@ contract Rota is ReentrancyGuard {
     }
 
     /**
+     * @notice Agree to be in a circle. Only a member of it may call this, and
+     * only before it starts.
+     *
+     * @dev Moves no value and grants nothing. It records that msg.sender chose
+     * this circle, which an allowance cannot express - see {_joined}.
+     *
+     * Joining twice is not an error. Someone who resubmits after a slow
+     * confirmation should not be told they did something wrong.
+     */
+    function join(uint256 circleId) external {
+        Circle storage circle = _circles[circleId];
+        if (circle.members.length == 0) revert UnknownCircle(circleId);
+        if (circle.started) revert AlreadyStarted();
+        if (!_isMember(circle, msg.sender)) revert NotAMember(msg.sender);
+        if (_joined[circleId][msg.sender]) return;
+
+        _joined[circleId][msg.sender] = true;
+        emit Joined(circleId, msg.sender);
+    }
+
+    /// @notice Whether `member` has agreed to be in `circleId`.
+    function hasJoined(
+        uint256 circleId,
+        address member
+    ) external view returns (bool) {
+        return _joined[circleId][member];
+    }
+
+    /**
      * @notice Start a circle. Callable by any member once every member has
-     * granted Rota an allowance of at least `contribution * (members - 1)`,
-     * which is the total each member pays across a full rotation.
-     * @dev Moves no value. It only reads allowances.
+     * called {join} AND granted Rota an allowance of at least
+     * `contribution * (members - 1)`, the total each pays across a rotation.
+     * @dev Moves no value. It only reads consent and allowances.
      */
     function start(uint256 circleId) external {
         Circle storage circle = _circles[circleId];
@@ -156,6 +204,10 @@ contract Rota is ReentrancyGuard {
         uint256 required = circle.contribution * (n - 1);
         for (uint256 i = 0; i < n; ++i) {
             address member = circle.members[i];
+            // Consent before capacity: someone who never agreed is a different
+            // problem from someone who agreed and is short, and naming the
+            // wrong one sends the organiser chasing the wrong person.
+            if (!_joined[circleId][member]) revert NotJoined(member);
             uint256 allowed = usdc.allowance(member, address(this));
             if (allowed < required) {
                 revert InsufficientAllowanceToStart(member, allowed, required);
@@ -212,6 +264,14 @@ contract Rota is ReentrancyGuard {
         for (uint256 i = 0; i < n; ++i) {
             address member = circle.members[i];
             if (member == recipient) continue;
+            /*
+             * Re-checked here, at the transfer itself, not only in {start}.
+             * The property that matters is "Rota never moves money belonging
+             * to someone who did not agree", and that property is worth more
+             * enforced where it could be violated than left depending on a
+             * check somewhere else having run first.
+             */
+            if (!_joined[circleId][member]) revert NotJoined(member);
             // Wallet to wallet. Rota is only the spender.
             usdc.safeTransferFrom(member, recipient, contribution);
             totalPaid += contribution;
@@ -261,6 +321,7 @@ contract Rota is ReentrancyGuard {
             address member = circle.members[i];
             uint256 allowed = usdc.allowance(member, address(this));
             uint256 balance = usdc.balanceOf(member);
+            bool joined = _joined[circleId][member];
 
             bool ready;
             if (complete) {
@@ -268,13 +329,17 @@ contract Rota is ReentrancyGuard {
             } else if (started && member == recipient) {
                 ready = true; // the recipient pays nothing this cycle
             } else {
-                ready = allowed >= required && balance >= contribution;
+                ready =
+                    joined &&
+                    allowed >= required &&
+                    balance >= contribution;
             }
 
             statuses[i] = MemberStatus({
                 member: member,
                 allowance: allowed,
                 balance: balance,
+                joined: joined,
                 ready: ready
             });
         }

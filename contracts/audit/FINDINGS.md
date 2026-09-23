@@ -1,10 +1,8 @@
 # Static analysis of Rota.sol
 
-Run on 2026-09-23 against `contracts/Rota.sol` at commit `9cefce7`.
-
 | Tool | Version | Status |
 | --- | --- | --- |
-| Slither | 0.9.2 (solc 0.8.24) | ran, 47 results, 7 on Rota.sol after filtering dependencies |
+| Slither | 0.9.2 (solc 0.8.24) | ran, 7 results on Rota.sol after filtering dependencies |
 | Aderyn | 0.6.8 | **did not run** — see below |
 
 Raw output is in `slither.md` (all contracts, including OpenZeppelin),
@@ -19,15 +17,21 @@ slither contracts/Rota.sol \
   --filter-paths node_modules --checklist
 ```
 
+> Slither caches compilation. After editing the contract, delete
+> `crytic-export/` and `artifacts/build-info/` or it will report findings
+> against the previous source, with line numbers that no longer exist. That
+> happened during this work and was caught only because `disburse` was
+> reported at line 180 when it had moved to 232.
+
 ### Aderyn
 
-Aderyn publishes binaries for `x86_64`/`aarch64` on Linux and macOS only. Its
-npm package refuses to install here — *"Platform with type Windows_NT and
-architecture x64 is not supported"* — and building from source with
-`cargo install aderyn --locked` fails in its `svm-rs-builds` build script,
-which fetches `binaries.soliditylang.org/windows-amd64/list.json` at compile
-time and times out. That host is reachable with curl (HTTP 200), so this is
-the build script rather than the network.
+Aderyn publishes binaries for Linux and macOS only. Its npm package refuses to
+install here — *"Platform with type Windows_NT and architecture x64 is not
+supported"* — and `cargo install aderyn --locked` fails in its `svm-rs-builds`
+build script, which fetches `binaries.soliditylang.org/windows-amd64/list.json`
+at compile time and times out. That host answers curl with HTTP 200, so this is
+the build script, not the network. Installing the Linux binary under WSL was
+not permitted in this environment.
 
 It has not been run, and nothing below is informed by it. On Linux or macOS:
 
@@ -37,106 +41,120 @@ cd contracts && aderyn .
 
 ---
 
-## 1. Allowance granted to Rota is spendable by any circle — **HIGH, REAL**
+## 1. Allowance granted to Rota was spendable by any circle — **FIXED**
 
 Slither: `arbitrary-send-erc20` (High impact, High confidence) on
-`Rota.disburse` line 216.
+`Rota.disburse`.
 
 > `Rota.disburse(uint256)` uses arbitrary from in transferFrom:
 > `usdc.safeTransferFrom(member, recipient, contribution)`
 
-**This is not a false positive.** `test/AllowanceReuse.poc.t.ts` demonstrates
-the theft end to end and passes.
-
-### Why
+### Before — a real, exploitable theft
 
 An ERC-20 allowance is granted to the Rota *contract*, not to a circle. Three
-facts combine:
+facts combined:
 
 1. `createCircle` is permissionless and takes an arbitrary member list. Nobody
-   it names is asked whether they agreed to be in it.
-2. `start` checks only that each member's allowance is **large enough**. It
-   cannot check what the allowance was *meant for*, because the token does not
-   record that.
-3. `disburse` then pulls `contribution` from every member to `members[0]`.
+   it named was asked whether they agreed to be in it.
+2. `start` checked only that each member's allowance was **large enough**. It
+   could not check what the allowance was *meant for*, because the token does
+   not record that.
+3. `disburse` then pulled `contribution` from every member to `members[0]`.
 
-So a stranger can name a victim who already has an allowance from a circle
-they did join, put themselves first in the rotation, and settle one cycle.
-
-### Proof
+So a stranger could name a victim who already had an allowance from a circle
+they did join, put themselves first in the rotation, and settle one cycle:
 
 ```
 Alice joins a real circle           -> allowance(Alice -> Rota) = 100 USDC
-Mallory creates circle [Mallory, Alice], contribution 100, period 1
+Mallory creates [Mallory, Alice], contribution 100, period 1
 Mallory approves 100 (never has to honour it — Mallory is paid first)
-Mallory calls start()               -> passes: Alice's allowance is 100 >= 100
-Mallory calls disburse()            -> Alice pays 100 to Mallory
+Mallory calls start()               -> passed: Alice's allowance was 100 >= 100
+Mallory calls disburse()            -> Alice paid 100 to Mallory
 
-Alice -100 USDC.  Mallory +100 USDC.  Alice's allowance is now 0,
-so the circle she actually joined can no longer settle either.
+Alice -100 USDC.  Mallory +100 USDC.  Alice's allowance was then 0,
+so the circle she actually joined could no longer settle either.
 ```
 
-Mallory's own obligation never comes due: they simply never let a second cycle
-settle, and can revoke their allowance immediately.
+Cost to the attacker was gas. The precondition was that the victim had any
+non-zero allowance to Rota — i.e. had joined any circle that had not finished.
 
-Cost to the attacker is gas. The precondition is that the victim has any
-non-zero allowance to Rota — i.e. has joined any circle and it has not
-finished.
+### After — consent is recorded, not inferred
 
-### What it does *not* break
+`join(uint256 circleId)` records that `msg.sender` chose a specific circle, in
+`mapping(uint256 => mapping(address => bool)) private _joined`. Only a member
+may call it, and only before the circle starts. Joining twice is a no-op rather
+than an error, because someone who resubmits after a slow confirmation has not
+done anything wrong.
 
-The custody invariant holds: Rota still never holds USDC, and the funds move
-wallet to wallet. This is theft between users, not a drain of the contract.
-
-### Fix
-
-The contract must record consent per circle rather than inferring it from a
-token allowance. Minimal change:
-
-```solidity
-mapping(uint256 => mapping(address => bool)) private _joined;
-
-/// @notice Opt into a specific circle. Only a member may call it.
-function join(uint256 circleId) external {
-    Circle storage circle = _circles[circleId];
-    if (circle.members.length == 0) revert UnknownCircle(circleId);
-    if (circle.started) revert AlreadyStarted();
-    if (!_isMember(circle, msg.sender)) revert NotAMember(msg.sender);
-    _joined[circleId][msg.sender] = true;
-    emit Joined(circleId, msg.sender);
-}
-```
-
-and in `start`, alongside the existing allowance check:
+`start` now checks consent **before** capacity, so the revert names the right
+problem:
 
 ```solidity
 if (!_joined[circleId][member]) revert NotJoined(member);
+uint256 allowed = usdc.allowance(member, address(this));
+if (allowed < required) revert InsufficientAllowanceToStart(...);
 ```
 
-The allowance check stays — it is still needed, it is just no longer doing a
-job it cannot do.
+`disburse` re-checks at the transfer itself:
 
-This makes joining two transactions (approve, then join) where it is currently
-one. That is the cost of the token not being able to scope an allowance.
+```solidity
+if (!_joined[circleId][member]) revert NotJoined(member);
+usdc.safeTransferFrom(member, recipient, contribution);
+```
 
-### Status
+That second check is redundant given `start`, and deliberately so. The property
+worth having is "Rota never moves money belonging to someone who did not
+agree". A property enforced at the point where it could be violated survives
+future edits to the code path that leads there; one that depends on an earlier
+function having run does not.
 
-**Not fixed in this commit.** Rota is deployed and immutable at
-`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf` on Arc mainnet and
-`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808` on Arc testnet. Fixing it means
-deploying a new contract and moving the app to it, which is a decision for the
-owner, not a change to make quietly. Editing `Rota.sol` in place would also
-break the match between this repository and the verified on-chain source.
+`previewRound` now returns `joined` per member and factors it into `ready`, so
+the app reads consent instead of inferring it from an allowance — which was the
+same flawed inference that made the attack possible.
 
-Until then, the mitigation available to a user is to keep their allowance no
-larger than their current circle needs, and to revoke it (`approve(rota, 0)`)
-when a circle finishes. The app's Leave control already does exactly that.
+### Evidence
+
+`test/AllowanceReuse.poc.t.ts` runs the identical attack and asserts it fails.
+Before the fix, its first assertion — *"Alice paid 100 USDC into a circle she
+never joined"* — passed. Now:
+
+```
+FIXED: an allowance is only spendable by a circle you joined
+  ✔ refuses to start a circle naming someone who never joined it
+  ✔ refuses to pull from a member added to a circle after it started
+  ✔ records consent per circle, not per contract
+  ✔ will not let a non-member join, or anyone join after the start
+  ✔ treats joining twice as a no-op rather than an error
+```
+
+The first of those asserts Alice's balance is unchanged **and** her allowance
+is still 100, so her own circle can still settle.
+
+### Slither still reports it, and that is now a false positive
+
+The detector is syntactic: it fires whenever `transferFrom`'s `from` is not
+`msg.sender`. It has no way to see that `member` is drawn from a fixed list, or
+that `_joined` gates the call. The finding cannot be cleared by any change that
+keeps Rota non-custodial, because pulling from another address is exactly how a
+contract moves money without ever holding it.
+
+It is left unsuppressed. A suppression comment would hide it from the next
+person who runs the tool, and the honest answer is not "this detector is wrong"
+but "this specific call is safe, and here is the test that says so".
+
+### Cost
+
+The 20-member `disburse` went from 427,136 to 470,463 gas — one storage read
+per paying member. Still 98.4% under Arc's 30M block limit.
+
+Joining is now two transactions: `approve` on USDC, then `join` on Rota. That
+is the price of a token that cannot scope an allowance to a purpose.
 
 ---
 
 ## 2. External calls inside a loop — LOW, ACCEPTED
 
-Slither: `calls-loop` ×3 — `start` line 159, `previewRound` lines 262–263.
+Slither: `calls-loop` ×3 — `start` line 211, `previewRound` lines 322–323.
 
 Real, and deliberate. The usual danger is that one member can make the loop
 revert and block everyone. Here:
@@ -147,38 +165,28 @@ revert and block everyone. Here:
   and no member-controlled contract to revert from.
 - `previewRound` is `view`; it costs the caller nothing on-chain.
 
-Measured: `start` for 20 members is 625,570 gas against a 30M block limit.
-
 No change.
 
 ## 3. `block.timestamp` used for comparisons — LOW, ACCEPTED
 
-Slither: `timestamp` on `disburse` lines 188 and 205.
+Slither: `timestamp` on `disburse` lines 240 and 257.
 
 Real in the sense that a block producer has some latitude over the timestamp.
-Immaterial here: `period` is hours or days, and the consequence of being a few
-seconds early is that a payment everybody already agreed to happens a few
-seconds early. Nothing branches on fine-grained time.
+Immaterial here: `period` is hours or days, and being a few seconds early means
+a payment everybody already agreed to happens a few seconds early.
 
-The one place timing does matter is the catch-up branch at line 205, which
-exists precisely so a circle left idle cannot be settled many times in one
-block. That is a correctness guard against *large* clock movement, which a
-block producer cannot manufacture.
+The one place timing matters is the catch-up branch, which exists precisely so
+a circle left idle cannot be settled many times in one block. That guards
+against *large* clock movement, which a block producer cannot manufacture.
 
 No change.
 
 ## 4. `solc-version` — INFORMATIONAL, FALSE POSITIVE
 
-Slither: *"Pragma version 0.8.24 necessitates a version too recent to be
-trusted. Consider deploying with 0.6.12/0.7.6/0.8.16"* and *"solc-0.8.24 is
-not recommended for deployment"*.
-
-This is a static list inside Slither 0.9.2, which predates 0.8.24. The advice
-is "prefer a compiler that has been in the field a while", not a known bug in
-0.8.24. 0.8.24 is the version this project is specified to use, is what the
-mainnet deployment is verified against, and has been stable for a long time by
-now. Downgrading to 0.8.16 to satisfy a 2023-era allowlist would be worse than
-the finding.
+Slither 0.9.2 carries a static list that predates 0.8.24 and suggests
+downgrading to 0.8.16. The advice is "prefer a compiler that has been in the
+field a while", not a known bug. 0.8.24 is what this project is specified to
+use and what the deployment is verified against.
 
 No change.
 
@@ -186,9 +194,9 @@ No change.
 
 The unfiltered run reports 40 further results, all inside
 `node_modules/@openzeppelin` — mostly `>=0.4.16` pragmas in the IERC20 and
-IERC165 interfaces and `^0.8.20` in SafeERC20 and ReentrancyGuard. These are
-upstream, they are interface files with no logic, and the effective compiler
-is pinned at 0.8.24 by our own pragma.
+IERC165 interfaces and `^0.8.20` in SafeERC20 and ReentrancyGuard. Upstream,
+interface files with no logic, and the effective compiler is pinned at 0.8.24
+by our own pragma.
 
 They are kept in `slither.md` rather than filtered away so the full run is on
 the record.

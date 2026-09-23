@@ -11,6 +11,12 @@ export type MemberStatus = {
   member: Address;
   allowance: bigint;
   balance: bigint;
+  /**
+   * Whether this member has called join() for THIS circle. Read from the
+   * contract rather than inferred from an allowance — inferring it from an
+   * allowance is what made someone else's circle able to spend it.
+   */
+  joined: boolean;
   ready: boolean;
 };
 

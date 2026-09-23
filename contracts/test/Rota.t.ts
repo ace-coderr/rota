@@ -34,7 +34,9 @@ type Ctx = Awaited<ReturnType<typeof setup>>;
  * Fresh token and fresh Rota per test, so no test can inherit balances or
  * allowances from another.
  */
-async function setup(options: { approve?: bigint } = {}) {
+async function setup(
+  options: { approve?: bigint; join?: boolean } = {},
+) {
   const token = await viem.deployContract("MockUSDC");
   const rota = await viem.deployContract("Rota", [token.address]);
 
@@ -53,6 +55,21 @@ async function setup(options: { approve?: bigint } = {}) {
   ]);
   await publicClient.waitForTransactionReceipt({ hash });
   const circleId = 0n;
+
+  /*
+   * Consent is separate from capacity. An allowance is granted to the
+   * contract and says nothing about which circle it was meant for, so every
+   * member has to say so explicitly before start() will count them. Tests
+   * that need someone who has NOT agreed pass join: false.
+   */
+  if (options.join !== false) {
+    for (const wallet of memberWallets) {
+      const joinHash = await rota.write.join([circleId], {
+        account: wallet.account,
+      });
+      await publicClient.waitForTransactionReceipt({ hash: joinHash });
+    }
+  }
 
   return { token, rota, circleId };
 }
@@ -517,6 +534,9 @@ describe("Rota", () => {
     }
 
     await rota.write.createCircle([bigAddresses, CONTRIBUTION, PERIOD]);
+    for (const wallet of big) {
+      await rota.write.join([0n], { account: wallet.account });
+    }
     await rota.write.start([0n], { account: big[0].account });
 
     await time.increase(Number(PERIOD));

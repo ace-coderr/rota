@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true
+    "noEmit": true,
+    // scripts/verify-states.ts is run by node --experimental-strip-types,
+    // which needs the real extension on its imports. Safe: noEmit is set.
+    "allowImportingTsExtensions": true
   },
   "include": ["hardhat.config.ts", "scripts/**/*.ts", "test/**/*.ts", "lib/**/*.ts"]
 }
