@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "icon": "node --experimental-strip-types --no-warnings scripts/gen-icon.ts"
   },
   "dependencies": {
     "@circle-fin/user-controlled-wallets": "^10.8.1",
