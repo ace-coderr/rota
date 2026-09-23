@@ -453,6 +453,28 @@
   margin: 0 auto;
 }
 
+/*
+ * The ring's viewBox is square, so its height is whatever its width is. Left
+ * uncapped at phone width that was 335px of decoration sitting between the
+ * hero and the first thing the page has to say, which put "How it works" most
+ * of a screen below the fold. Capped, it reads as an emblem rather than a
+ * wall, and the section heading is one short scroll away.
+ *
+ * 13rem is where this stops paying: going down to 11rem shrinks the ring by
+ * another 32px and moves the heading up by the same 32px, because the ring is
+ * not what most of the height is.
+ *
+ * Scaled rather than switched at a breakpoint. A flat cap sized for a phone
+ * left the ring stranded in the middle of a 720px column on a tablet, which
+ * is just as wrong in the other direction; 55vw tracks the column it sits in
+ * and only bottoms out on the narrowest screens, where the crowding is.
+ */
+@media (max-width: 64rem) {
+  .ring-wrap {
+    max-width: clamp(13rem, 55vw, 30rem);
+  }
+}
+
 .token {
   animation: travel 3s cubic-bezier(0.4, 0, 0.5, 1) infinite;
 }
