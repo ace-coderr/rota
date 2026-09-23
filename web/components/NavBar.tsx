@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAccount, useDisconnect } from "wagmi";
 
+import { Button } from "@/components/Button";
 import { RotaWordmark } from "@/components/Logo";
 import { WalletBar } from "@/components/WalletBar";
 import { DEFAULT_DEPLOYMENT, deploymentFor } from "@/lib/deployments";
@@ -66,24 +67,23 @@ export function NavBar() {
         {signedIn ? (
           <>
             <span className="chip">{chainLabel}</span>
-            <button
-              type="button"
-              className="nav-btn"
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={() => (isConnected ? disconnect() : circle.signOut())}
               title="Sign out"
             >
               {shown ? shortAddress(shown) : "Signed in"}
-            </button>
+            </Button>
           </>
         ) : (
-          <button
-            type="button"
-            className="nav-btn nav-btn-filled"
+          <Button
+            size="sm"
             aria-expanded={panelOpen}
             onClick={() => setPanelOpen((open) => !open)}
           >
             {panelOpen ? "Close" : "Connect"}
-          </button>
+          </Button>
         )}
       </div>
 

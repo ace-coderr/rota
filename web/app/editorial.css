@@ -54,6 +54,15 @@
   border-bottom-color: rgba(240, 238, 233, 0.22);
 }
 
+/* A blue focus ring on near-black is all but invisible, and a wash made of
+   near-black does nothing there either. */
+.nav,
+.foot,
+.band-dark {
+  --focus-ring: var(--cream);
+  --btn-wash: rgba(240, 238, 233, 0.14);
+}
+
 /* Holds the lockup, which draws itself in currentColor. */
 .nav-mark {
   display: flex;
@@ -90,37 +99,6 @@
   gap: 0.5rem;
 }
 
-.nav-btn {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 0.5rem 0.875rem;
-  border: 1px solid var(--cream);
-  background: transparent;
-  color: var(--cream);
-  cursor: pointer;
-  border-radius: 2px;
-  min-height: 2.25rem;
-}
-
-.nav-btn:hover {
-  background: var(--cream);
-  color: var(--ink);
-}
-
-.nav-btn-filled {
-  background: var(--blue);
-  border-color: var(--blue);
-  color: var(--white);
-}
-
-.nav-btn-filled:hover {
-  background: var(--white);
-  border-color: var(--white);
-  color: var(--ink);
-}
-
 .chip {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.6875rem;
@@ -144,6 +122,11 @@
   border: 1px solid var(--ink);
   padding: 1rem;
   border-radius: 2px;
+
+  /* A cream panel hanging off a near-black navbar: it inherits the dark
+     surface's ring and wash, both of which vanish on cream. */
+  --focus-ring: var(--blue);
+  --btn-wash: rgba(10, 10, 10, 0.08);
 }
 
 @media (min-width: 64rem) {
@@ -191,22 +174,22 @@
     flex-direction: row;
   }
 
-  .hero-actions .btn {
+  .hero-actions .btn-block {
     width: auto;
     flex: 1;
   }
-}
 
-.btn.btn-ondark {
-  background: transparent;
-  border-color: var(--cream);
-  color: var(--cream);
-}
-
-.btn.btn-ondark:hover:not(:disabled) {
-  background: var(--cream);
-  border-color: var(--cream);
-  color: var(--ink);
+  /*
+   * .hero-actions spaces its buttons with gap, so the stacked-button margin
+   * has to come off — and specifically, not by tying on specificity with it.
+   * Left on, that margin does not merely add 12px of space: in a row with
+   * align-items: stretch it makes the whole row 12px taller and the FIRST
+   * button stretches to fill it, so the two buttons end up different heights
+   * for a reason that is nowhere near either of them.
+   */
+  .hero-actions .btn-block + .btn-block {
+    margin-top: 0;
+  }
 }
 
 .stat-strip {

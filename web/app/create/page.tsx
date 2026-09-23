@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+
+import { Button } from "@/components/Button";
 import { useState } from "react";
 import { isAddress, parseUnits, type Address } from "viem";
 import { useAccount, usePublicClient } from "wagmi";
@@ -204,9 +206,10 @@ export default function CreatePage() {
           in.
         </p>
         <div className="share">{invite}</div>
-        <button
-          type="button"
-          className="btn btn-secondary"
+        <Button
+          variant="secondary"
+          size="lg"
+          block
           onClick={() => {
             navigator.clipboard?.writeText(invite).then(
               () => setCopied(true),
@@ -215,7 +218,7 @@ export default function CreatePage() {
           }}
         >
           {copied ? "Copied" : "Copy the link"}
-        </button>
+        </Button>
         <p className="action-note">
           The names are only in the link itself. They are never sent to us and
           never go on the blockchain.
@@ -223,9 +226,9 @@ export default function CreatePage() {
 
         <hr className="divider" />
 
-        <Link href={`/circle/${circleId}`} className="btn">
+        <Button href={`/circle/${circleId}`} size="lg" block>
           Open my circle
-        </Link>
+        </Button>
         <p className="action-note">
           Nothing has been charged. Nobody pays anything until everyone has
           joined and the circle starts.
@@ -316,9 +319,9 @@ export default function CreatePage() {
           </div>
         )}
 
-        <button type="submit" className="btn" disabled={!ready}>
+        <Button type="submit" size="lg" block disabled={!ready}>
           {working ? "Creating your circle…" : "Create this circle"}
-        </button>
+        </Button>
         <p className="action-note">
           {!isConnected
             ? "Connect your wallet first."

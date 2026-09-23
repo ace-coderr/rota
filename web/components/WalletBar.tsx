@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 
+import { Button } from "@/components/Button";
 import { DEFAULT_DEPLOYMENT, deploymentFor } from "@/lib/deployments";
 import { shortAddress } from "@/lib/format";
 import {
@@ -60,14 +61,13 @@ export function WalletBar({ reason }: { reason?: string }) {
           <div className="notice notice-wait">
             <p className="notice-title">Your wallet is on the wrong network.</p>
             <p>Switch it to {target?.label ?? "Arc"} to carry on.</p>
-            <button
-              type="button"
-              className="btn"
+            <Button
+              block
               disabled={isSwitching || !target}
               onClick={() => target && switchChain({ chainId: target.chain.id })}
             >
               {isSwitching ? "Switching…" : `Switch to ${target?.label ?? "Arc"}`}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -75,7 +75,7 @@ export function WalletBar({ reason }: { reason?: string }) {
           Signed in as {shown ? shortAddress(shown) : ""}{" "}
           <button
             type="button"
-            className="btn-link"
+            className="text-action"
             onClick={() => (isConnected ? disconnect() : circle.signOut())}
           >
             Sign out
@@ -93,12 +93,12 @@ export function WalletBar({ reason }: { reason?: string }) {
         <p style={{ marginBottom: "1rem" }}>
           We’ve emailed you a code. Enter it to finish signing in.
         </p>
-        <button type="button" className="btn" onClick={circle.verifyEmailCode}>
+        <Button block onClick={circle.verifyEmailCode}>
           Enter my code
-        </button>
+        </Button>
         <button
           type="button"
-          className="btn-link"
+          className="text-action"
           style={{ marginTop: "1rem" }}
           onClick={circle.signOut}
         >
@@ -126,27 +126,24 @@ export function WalletBar({ reason }: { reason?: string }) {
       )}
 
       {googleConfigured && (
-        <button
-          type="button"
-          className="btn"
+        <Button
+          block
           disabled={working}
           onClick={() => guard("google", circle.signInWithGoogle)}
-          style={{ marginBottom: "0.75rem" }}
         >
           {busy === "google" ? "Opening Google…" : "Continue with Google"}
-        </button>
+        </Button>
       )}
 
       {circleConfigured && !showEmail && (
-        <button
-          type="button"
-          className="btn btn-secondary"
+        <Button
+          block
+          variant="secondary"
           disabled={working}
           onClick={() => setShowEmail(true)}
-          style={{ marginBottom: "0.75rem" }}
         >
           Continue with email
-        </button>
+        </Button>
       )}
 
       {circleConfigured && showEmail && (
@@ -160,42 +157,36 @@ export function WalletBar({ reason }: { reason?: string }) {
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
           />
-          <button
-            type="button"
-            className="btn"
+          <Button
+            block
             style={{ marginTop: "0.75rem" }}
             disabled={!emailValid || working}
             onClick={() => guard("email", () => circle.sendEmailCode(email.trim()))}
           >
             {busy === "email" ? "Sending…" : "Email me a code"}
-          </button>
+          </Button>
         </div>
       )}
 
       {!showWallet ? (
-        <button
-          type="button"
-          className="btn btn-secondary"
-          disabled={working}
-          onClick={() => setShowWallet(true)}
-        >
+        <Button block variant="secondary" disabled={working} onClick={() => setShowWallet(true)}>
           I have a wallet
-        </button>
+        </Button>
       ) : connectors.length === 0 ? (
         <p className="small muted" style={{ margin: 0 }}>
           No wallet found on this device. Install one, then reload this page.
         </p>
       ) : (
         connectors.map((connector) => (
-          <button
+          <Button
             key={connector.uid}
-            type="button"
-            className="btn btn-secondary"
+            block
+            variant="secondary"
             disabled={isPending}
             onClick={() => connect({ connector })}
           >
             {isPending ? "Connecting…" : `Connect ${connector.name}`}
-          </button>
+          </Button>
         ))
       )}
 

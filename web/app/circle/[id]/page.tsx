@@ -5,6 +5,7 @@ import { use, useState } from "react";
 import type { Address } from "viem";
 import { useAccount, useBlock, useGasPrice } from "wagmi";
 
+import { Button } from "@/components/Button";
 import { ErrorNotice } from "@/components/ErrorNotice";
 import { WalletBar } from "@/components/WalletBar";
 import {
@@ -321,7 +322,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
       <button
         type="button"
-        className="btn-link"
+        className="text-action"
         onClick={() => setShowNames((v) => !v)}
       >
         {showNames ? "Done adding names" : "Add names for these people"}
@@ -386,13 +387,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         {peopleList}
 
         <hr className="divider" />
-        <Link
-          href={`/proof/${id}`}
-          className="btn btn-secondary"
-          style={{ textDecoration: "none" }}
-        >
+        <Button href={`/proof/${id}`} size="lg" variant="secondary" block>
           See the full record
-        </Link>
+        </Button>
       </main>
     );
   }
@@ -405,9 +402,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   if (isConnected && !rotaBlocked) {
     if (isMember && mine && !mine.hasJoined) {
       action = (
-        <button
-          type="button"
-          className="btn"
+        <Button
+          size="lg"
+          block
           disabled={busy}
           onClick={() =>
             run("join", {
@@ -419,7 +416,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           }
         >
           {pending === "join" ? "Joining…" : "Join this circle"}
-        </button>
+        </Button>
       );
       actionNote = (
         <>
@@ -429,9 +426,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       );
     } else if (!started && everyoneReady && isMember) {
       action = (
-        <button
-          type="button"
-          className="btn"
+        <Button
+          size="lg"
+          block
           disabled={busy}
           onClick={() =>
             run("start", {
@@ -443,7 +440,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           }
         >
           {pending === "start" ? "Starting…" : "Start the circle"}
-        </button>
+        </Button>
       );
       actionNote = (
         <>
@@ -453,9 +450,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       );
     } else if (started && due && everyoneReady) {
       action = (
-        <button
-          type="button"
-          className="btn"
+        <Button
+          size="lg"
+          block
           disabled={busy}
           onClick={() =>
             run("pay", {
@@ -469,7 +466,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           {pending === "pay"
             ? "Sending…"
             : `Send ${standings[cycleIndex]?.name ?? "this turn"}'s payment`}
-        </button>
+        </Button>
       );
       actionNote = (
         <>
@@ -670,14 +667,15 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           */}
           {alreadyPaid && !confirmLeave ? (
             <>
-              <button
-                type="button"
-                className="btn btn-quiet"
+              <Button
+                size="md"
+                variant="secondary"
+                block
                 disabled={busy}
                 onClick={() => setConfirmLeave(true)}
               >
                 Stop Rota from moving your money
-              </button>
+              </Button>
               <p className="action-note">
                 You&rsquo;ve already received everyone&rsquo;s share.
               </p>
@@ -694,9 +692,10 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                   : "the people still waiting won’t get theirs."}{" "}
                 The circle can&rsquo;t settle another round without you.
               </p>
-              <button
-                type="button"
-                className="btn btn-quiet"
+              <Button
+                size="md"
+                variant="secondary"
+                block
                 disabled={busy}
                 onClick={() =>
                   run("leave", {
@@ -710,21 +709,22 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                 {pending === "leave"
                   ? "Stopping…"
                   : "Leave anyway, and stop my payments"}
-              </button>
-              <button
-                type="button"
-                className="btn"
+              </Button>
+              <Button
+                size="md"
+                block
                 disabled={busy}
                 onClick={() => setConfirmLeave(false)}
               >
                 Stay in the circle
-              </button>
+              </Button>
             </div>
           ) : (
             <>
-              <button
-                type="button"
-                className="btn btn-quiet"
+              <Button
+                size="md"
+                variant="secondary"
+                block
                 disabled={busy}
                 onClick={() =>
                   run("leave", {
@@ -738,7 +738,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                 {pending === "leave"
                   ? "Stopping…"
                   : "Stop Rota from moving your money"}
-              </button>
+              </Button>
               <p className="action-note">
                 The others will see that you have left, and the circle
                 can&rsquo;t settle another round until you rejoin or they
@@ -750,13 +750,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       )}
 
       <hr className="divider" />
-      <Link
-        href={`/proof/${id}`}
-        className="btn btn-secondary"
-        style={{ textDecoration: "none" }}
-      >
+      <Button href={`/proof/${id}`} size="md" variant="secondary" block>
         See the full record
-      </Link>
+      </Button>
       <p className="action-note">
         Anyone can check this circle without signing in.
       </p>

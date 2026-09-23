@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { formatUnits } from "viem";
 import { useReadContracts } from "wagmi";
 
+import { Button } from "@/components/Button";
 import { CircleRing } from "@/components/CircleRing";
 import { NavBar } from "@/components/NavBar";
 import { CountUp, Reveal } from "@/components/Reveal";
@@ -76,12 +76,12 @@ export default function Home() {
             </p>
 
             <div className="hero-actions">
-              <Link href="/create" className="btn">
+              <Button href="/create" size="lg" block>
                 Start a circle
-              </Link>
-              <Link href="#live-proof" className="btn btn-ondark">
+              </Button>
+              <Button href="#live-proof" size="lg" variant="secondary" block>
                 See the proof
-              </Link>
+              </Button>
             </div>
 
             <div className="stat-strip">
