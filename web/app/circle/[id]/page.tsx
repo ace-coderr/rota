@@ -58,6 +58,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     rotaBlocked,
     preview,
     decimals,
+    circleCount,
     refetchAll,
     isLoading,
   } = useCircle(circleId);
@@ -223,6 +224,23 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     }
   }
 
+  /**
+   * What the valid circle numbers actually are.
+   *
+   * IDs are zero-based, so four circles are numbered 0 to 3 and /circle/4 is
+   * the obvious mistake — off by exactly one from the count. A bare "not
+   * found" leaves someone guessing whether they mistyped, whether the circle
+   * was deleted, or whether they are on the wrong network.
+   */
+  const knownRange = (() => {
+    if (circleCount === undefined) return undefined;
+    const count = Number(circleCount);
+    const where = deployment?.label ?? "this network";
+    if (count === 0) return `No circles have been created on ${where} yet.`;
+    if (count === 1) return `There is 1 circle on ${where}, numbered 0.`;
+    return `There are ${count} circles on ${where}, numbered 0 to ${count - 1}.`;
+  })();
+
   // ------------------------------------------------------------- early exits
 
   if (!ROTA_ADDRESS || circleId === undefined) {
@@ -234,7 +252,10 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         {circleId === undefined ? (
           <>
             <h1>Circle not found</h1>
-            <p>Check the number you were given and try again.</p>
+            <p>
+              &ldquo;{id}&rdquo; isn&rsquo;t a circle number.{" "}
+              {knownRange ?? "Check the number you were given and try again."}
+            </p>
           </>
         ) : NOTHING_CONFIGURED ? (
           <>
@@ -276,7 +297,10 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           ← Back
         </Link>
         <h1>Circle not found</h1>
-        <p>There&rsquo;s no circle number {id}. Check the number you were given.</p>
+        <p>
+          Circle {id} doesn&rsquo;t exist yet.{" "}
+          {knownRange ?? "Check the number you were given."}
+        </p>
       </main>
     );
   }

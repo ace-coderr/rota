@@ -96,6 +96,22 @@ export function useCircle(circleId: bigint | undefined) {
     query: { enabled: Boolean(address && ROTA_ADDRESS) },
   });
 
+  /**
+   * How many circles exist. Needed so a wrong circle number can say what the
+   * right ones are — IDs are zero-based, so with four circles the valid range
+   * is 0 to 3 and /circle/4 is the easiest mistake to make.
+   *
+   * Read independently of the circle itself: it has to answer even when the
+   * id in the URL is not a number at all, which disables the reads above.
+   */
+  const circleCount = useReadContract({
+    address: ROTA_ADDRESS,
+    abi: ROTA_ABI,
+    functionName: "circleCount",
+    chainId: readChainId,
+    query: { enabled: Boolean(ROTA_ADDRESS) },
+  });
+
   const balance = useReadContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
@@ -166,6 +182,7 @@ export function useCircle(circleId: bigint | undefined) {
       allowance.refetch(),
       balance.refetch(),
       blocklist.refetch(),
+      circleCount.refetch(),
     ]);
   };
 
@@ -178,6 +195,7 @@ export function useCircle(circleId: bigint | undefined) {
     decimals: decimals as number | undefined,
     myAllowance: allowance.data as bigint | undefined,
     myBalance: balance.data as bigint | undefined,
+    circleCount: circleCount.data as bigint | undefined,
     isLoading: query.isLoading,
     error: query.error,
     refetchAll,
