@@ -1,0 +1,92 @@
+C:\Users\ACE CODER\AppData\Local\Programs\Python\Python313\Lib\site-packages\slither\utils\output.py:9: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import require
+Multiple frameworks detected: solc, Solc-json. Using solc (highest priority). Use --compile-force-framework to override.
+'solc --version' running
+'solc @openzeppelin/=node_modules/@openzeppelin/ contracts/Rota.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,C:\Users\ACE CODER\Desktop\ace\hackathons\rota\contracts\contracts' running
+
+Rota.disburse(uint256) (contracts/Rota.sol#180-221) uses arbitrary from in transferFrom: usdc.safeTransferFrom(member,recipient,contribution) (contracts/Rota.sol#216)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#arbitrary-from-in-transferfrom
+
+Rota.start(uint256) (contracts/Rota.sol#149-169) has external calls inside a loop: allowed = usdc.allowance(member,address(this)) (contracts/Rota.sol#159)
+Rota.previewRound(uint256) (contracts/Rota.sol#234-281) has external calls inside a loop: allowed = usdc.allowance(member,address(this)) (contracts/Rota.sol#262)
+Rota.previewRound(uint256) (contracts/Rota.sol#234-281) has external calls inside a loop: balance = usdc.balanceOf(member) (contracts/Rota.sol#263)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+
+Rota.disburse(uint256) (contracts/Rota.sol#180-221) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp < circle.nextDueAt (contracts/Rota.sol#188)
+	- block.timestamp >= circle.nextDueAt + circle.period (contracts/Rota.sol#205)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+SafeERC20._safeTransfer(IERC20,address,uint256,bool) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#176-200) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#179-199)
+SafeERC20._safeTransferFrom(IERC20,address,address,uint256,bool) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#212-244) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#221-243)
+SafeERC20._safeApprove(IERC20,address,uint256,bool) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#255-279) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#258-278)
+StorageSlot.getAddressSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#66-70) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#67-69)
+StorageSlot.getBooleanSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#75-79) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#76-78)
+StorageSlot.getBytes32Slot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#84-88) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#85-87)
+StorageSlot.getUint256Slot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#93-97) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#94-96)
+StorageSlot.getInt256Slot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#102-106) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#103-105)
+StorageSlot.getStringSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#111-115) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#112-114)
+StorageSlot.getStringSlot(string) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#120-124) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#121-123)
+StorageSlot.getBytesSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#129-133) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#130-132)
+StorageSlot.getBytesSlot(bytes) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#138-142) uses assembly
+	- INLINE ASM (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#139-141)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+
+Different versions of Solidity are used:
+	- Version used: ['0.8.24', '>=0.4.16', '>=0.6.2', '^0.8.20']
+	- 0.8.24 (contracts/Rota.sol#2)
+	- >=0.4.16 (node_modules/@openzeppelin/contracts/interfaces/IERC165.sol#4)
+	- >=0.4.16 (node_modules/@openzeppelin/contracts/interfaces/IERC20.sol#4)
+	- >=0.4.16 (node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol#4)
+	- >=0.4.16 (node_modules/@openzeppelin/contracts/utils/introspection/IERC165.sol#4)
+	- >=0.6.2 (node_modules/@openzeppelin/contracts/interfaces/IERC1363.sol#4)
+	- ^0.8.20 (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#4)
+	- ^0.8.20 (node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol#4)
+	- ^0.8.20 (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#5)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
+
+SafeERC20._safeApprove(IERC20,address,uint256,bool) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#255-279) is never used and should be removed
+SafeERC20._safeTransfer(IERC20,address,uint256,bool) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#176-200) is never used and should be removed
+SafeERC20.approveAndCallRelaxed(IERC1363,address,uint256,bytes) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#159-165) is never used and should be removed
+SafeERC20.forceApprove(IERC20,address,uint256) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#105-110) is never used and should be removed
+SafeERC20.safeDecreaseAllowance(IERC20,address,uint256) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#86-94) is never used and should be removed
+SafeERC20.safeIncreaseAllowance(IERC20,address,uint256) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#72-75) is never used and should be removed
+SafeERC20.safeTransfer(IERC20,address,uint256) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#33-37) is never used and should be removed
+SafeERC20.transferAndCallRelaxed(IERC1363,address,uint256,bytes) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#119-125) is never used and should be removed
+SafeERC20.transferFromAndCallRelaxed(IERC1363,address,address,uint256,bytes) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#134-146) is never used and should be removed
+SafeERC20.trySafeTransfer(IERC20,address,uint256) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#52-54) is never used and should be removed
+SafeERC20.trySafeTransferFrom(IERC20,address,address,uint256) (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#59-61) is never used and should be removed
+StorageSlot.getAddressSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#66-70) is never used and should be removed
+StorageSlot.getBooleanSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#75-79) is never used and should be removed
+StorageSlot.getBytes32Slot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#84-88) is never used and should be removed
+StorageSlot.getBytesSlot(bytes) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#138-142) is never used and should be removed
+StorageSlot.getBytesSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#129-133) is never used and should be removed
+StorageSlot.getInt256Slot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#102-106) is never used and should be removed
+StorageSlot.getStringSlot(bytes32) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#111-115) is never used and should be removed
+StorageSlot.getStringSlot(string) (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#120-124) is never used and should be removed
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dead-code
+
+Pragma version0.8.24 (contracts/Rota.sol#2) necessitates a version too recent to be trusted. Consider deploying with 0.6.12/0.7.6/0.8.16
+Pragma version>=0.6.2 (node_modules/@openzeppelin/contracts/interfaces/IERC1363.sol#4) allows old versions
+Pragma version>=0.4.16 (node_modules/@openzeppelin/contracts/interfaces/IERC165.sol#4) allows old versions
+Pragma version>=0.4.16 (node_modules/@openzeppelin/contracts/interfaces/IERC20.sol#4) allows old versions
+Pragma version>=0.4.16 (node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol#4) allows old versions
+Pragma version^0.8.20 (node_modules/@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol#4) necessitates a version too recent to be trusted. Consider deploying with 0.6.12/0.7.6/0.8.16
+Pragma version^0.8.20 (node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol#4) necessitates a version too recent to be trusted. Consider deploying with 0.6.12/0.7.6/0.8.16
+Pragma version^0.8.20 (node_modules/@openzeppelin/contracts/utils/StorageSlot.sol#5) necessitates a version too recent to be trusted. Consider deploying with 0.6.12/0.7.6/0.8.16
+Pragma version>=0.4.16 (node_modules/@openzeppelin/contracts/utils/introspection/IERC165.sol#4) allows old versions
+solc-0.8.24 is not recommended for deployment
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+contracts/Rota.sol analyzed (7 contracts with 84 detectors), 47 result(s) found

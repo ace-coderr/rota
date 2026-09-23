@@ -3,6 +3,11 @@
 A rotating savings circle, settled in USDC on [Arc](https://arc.network).
 
 > **Unaudited — use small amounts.**
+>
+> **Known high-severity finding, unfixed.** An allowance granted to Rota can be
+> spent by any circle, including one a stranger creates naming you. See
+> [Review status](#review-status). Keep your allowance no larger than your
+> current circle needs, and revoke it when a circle finishes.
 
 A group agrees on an amount and a schedule: every round, each member puts in the
 same amount, and one member receives everyone else's share. The turn passes
@@ -175,6 +180,56 @@ OpenZeppelin, guard for guard, because the real token reverts with strings
 (`"ERC20: transfer amount exceeds balance"`) rather than OZ v5 custom errors, and
 carries pause and blocklist machinery. A mock that fails differently from
 production would have made the suite green and the app wrong.
+
+## Review status
+
+Rota has **not** had a professional audit. What it has had:
+
+### Tools
+
+| Tool | Version | Result |
+| --- | --- | --- |
+| Slither | 0.9.2 | 7 findings on `Rota.sol`: 1 high, 3 low, 2 informational, 1 dependency noise |
+| Aderyn | 0.6.8 | **not run** — no Windows build, and the source build fails in its `svm-rs-builds` step |
+
+Full output and a finding-by-finding analysis, including why three are accepted
+and one is a false positive, is in [`contracts/audit/`](contracts/audit/).
+
+### The one that is real
+
+**An allowance granted to Rota is spendable by any circle.** An ERC-20
+allowance is granted to the contract, not to a circle; `createCircle` is
+permissionless and never asks the people it names whether they agreed; and
+`start` can only check that an allowance is large enough, not what it was meant
+for. A stranger can therefore create a circle naming someone who already has an
+allowance, put themselves first in the rotation, and take one contribution.
+
+It is demonstrated end to end by `contracts/test/AllowanceReuse.poc.t.ts`,
+which passes. The fix — recording consent per circle instead of inferring it
+from a token allowance — is written out in
+[`contracts/audit/FINDINGS.md`](contracts/audit/FINDINGS.md). It is **not
+applied**: the contract is deployed and immutable, so fixing it means deploying
+a new one and moving the app across, which is an owner's decision.
+
+The custody invariant is unaffected. Rota still never holds USDC; this is theft
+between users, not a drain of the contract.
+
+### Tests
+
+21 tests, `npm test --prefix contracts`, plus the proof-of-concept above.
+
+The core claim — **"Rota never holds USDC"** — is mutation-tested: the original
+balance-based assertion passed against a deliberately custodial implementation,
+so it now parses USDC Transfer events and asserts Rota is never an endpoint of
+one. Re-running that mutation fails as it should. Details under
+[Testing](#testing).
+
+### What this is not
+
+None of the above is a substitute for a professional audit. Static analysis
+finds shapes it has patterns for; a suite tests what its author thought of.
+Neither reasons about economic design, incentive failure, or what a determined
+attacker does with a week and the source. Rota is unaudited. Use small amounts.
 
 ## Running it locally
 
