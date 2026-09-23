@@ -171,6 +171,38 @@ for (const wallet of wallets) {
   await send(`approve ${fmt(FULL_ROTATION)} by ${who}`, hash);
 }
 
+// ---------------------------------------------------------------------- join
+/*
+ * Consent, separately from capacity. An allowance is granted to the contract
+ * and says nothing about which circle it was meant for, so every member has to
+ * say so explicitly before start() will count them.
+ */
+console.log("\n=== join (consent, one signature each) ===");
+let joinGas = 0n;
+for (const wallet of wallets) {
+  const who = wallet.account!.address as Address;
+  const hash = await wallet.writeContract({
+    address: ROTA_ADDRESS,
+    abi: rota.abi,
+    functionName: "join",
+    args: [circleId],
+  });
+  const receipt = await send(`join by ${who}`, hash);
+  joinGas += receipt.gasUsed;
+}
+
+for (const who of addresses) {
+  const joined = (await publicClient.readContract({
+    address: ROTA_ADDRESS,
+    abi: rota.abi,
+    functionName: "hasJoined",
+    args: [circleId, who],
+  })) as boolean;
+  if (!joined) throw new Error(`hasJoined is false for ${who} after joining`);
+}
+console.log(`  all ${addresses.length} members recorded as joined`);
+
+
 // --------------------------------------------------------------------- start
 console.log("\n=== start ===");
 const startHash = await member1.writeContract({

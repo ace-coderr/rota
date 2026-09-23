@@ -4,11 +4,11 @@ A rotating savings circle, settled in USDC on [Arc](https://arc.network).
 
 > **Unaudited — use small amounts.**
 >
-> **The high-severity allowance finding is fixed in this source.** A member now
-> has to `join(circleId)` explicitly, and money only moves for circles they
-> joined. The fix is **not yet deployed** — the addresses below still run the
-> vulnerable contract. Until they are replaced, keep your allowance no larger
-> than your current circle needs and revoke it when a circle finishes. See
+> **The high-severity allowance finding is fixed, and live on testnet.** A
+> member now has to `join(circleId)` explicitly, and money only moves for
+> circles they joined. **Mainnet is still running the vulnerable contract** —
+> until it is replaced, keep your allowance no larger than your current circle
+> needs and revoke it when a circle finishes. See
 > [Review status](#review-status).
 
 A group agrees on an amount and a schedule: every round, each member puts in the
@@ -59,17 +59,22 @@ round is a single transaction. The 20-member round below settled in one block.
 
 | network | chain | address |
 | --- | --- | --- |
-| Arc testnet | `5042002` | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 — **deprecated** |
-| Arc mainnet | `5042` | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 — **deprecated** |
+| Arc testnet | `5042002` | [`0xe0b354e9251d81ce957262db1c93e9c56f85b3ba`](https://explorer.testnet.arc.io/address/0xe0b354e9251d81ce957262db1c93e9c56f85b3ba) — block 63651642 |
+| Arc mainnet | `5042` | not yet deployed |
 
-Both addresses above predate the consent fix and carry the allowance-reuse
-vulnerability described under [Review status](#review-status). They are kept
-here rather than deleted: they hold real circles, they are what the verified
-sources on Sourcify correspond to, and a deployment record that quietly drops
-its own history is worth nothing. Do not point a wallet at them.
+### Superseded
 
-Replacements are not yet deployed. When they are, they go in this table above
-the deprecated pair, with their own blocks.
+| Chain | Address | Why |
+| --- | --- | --- |
+| Arc testnet | [`0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808`](https://explorer.testnet.arc.io/address/0x86Fc49612A3A7832865CCd65a5d7A5f689a5a808) — block 63306726 | allowance reuse |
+| Arc mainnet | [`0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf`](https://explorer.arc.io/address/0x2eb23a1aae43ff4c0aee3e1e6503475fa3b81eaf) — block 22123755 | allowance reuse |
+
+Both predate the consent fix and carry the vulnerability described under
+[Review status](#review-status). They are kept here rather than deleted: they
+hold real circles, they are what the verified sources on Sourcify correspond
+to, and a deployment record that quietly drops its own history is worth
+nothing. **Do not point a wallet at them.** The mainnet one is still what the
+production app uses until its replacement is deployed.
 
 USDC is the predeploy at `0x3600000000000000000000000000000000000000` on both,
 6 decimals, read from the token rather than assumed.
