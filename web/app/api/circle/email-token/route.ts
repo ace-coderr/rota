@@ -1,4 +1,5 @@
-import { circle, circleError } from "@/lib/server/circle";
+import { circle } from "@/lib/server/circle";
+import { circleFailure, statusFor } from "@/lib/server/circle-errors";
 
 /** Step 1 of email sign-in: Circle emails a one-time code. */
 export async function POST(request: Request) {
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
       otpToken: response.data?.otpToken,
     });
   } catch (error) {
-    const { code, message } = circleError(error);
-    return Response.json({ code, message }, { status: 502 });
+    const failure = circleFailure("email-token", error);
+    return Response.json(failure, { status: statusFor(failure.kind) });
   }
 }

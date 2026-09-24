@@ -1,4 +1,5 @@
-import { circle, circleError } from "@/lib/server/circle";
+import { circle } from "@/lib/server/circle";
+import { circleFailure, statusFor } from "@/lib/server/circle-errors";
 
 /** Polls a transaction until it reaches a terminal state. Read-only. */
 export async function POST(request: Request) {
@@ -23,7 +24,7 @@ export async function POST(request: Request) {
       errorReason: tx?.errorReason,
     });
   } catch (error) {
-    const { code, message } = circleError(error);
-    return Response.json({ code, message }, { status: 502 });
+    const failure = circleFailure("transaction", error);
+    return Response.json(failure, { status: statusFor(failure.kind) });
   }
 }

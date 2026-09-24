@@ -632,6 +632,124 @@ textarea {
   color: var(--on-light-soft);
 }
 
+/* ------------------------------------------------------- build layout */
+
+/*
+ * A 35rem column centred on a 1440px screen leaves most of the window empty
+ * and pushes the summary a scroll away from the thing it summarises. Above
+ * 64rem the decisions sit left at a comfortable measure and the recap sits
+ * right, in view the whole time.
+ *
+ * 1100px overall, not wider: a form is read line by line, and a measure that
+ * fills a 27-inch monitor is not easier to read, only longer to cross.
+ */
+/* Qualified with the element: `main.sheet` above is (0,1,1) and a bare class
+   would lose to it, leaving the page at its 35rem measure. */
+main.sheet-wide {
+  max-width: 69rem;
+}
+
+.build {
+  display: grid;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .build {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: 2rem;
+  }
+}
+
+.build-steps {
+  min-width: 0;
+}
+
+.build-side {
+  min-width: 0;
+}
+
+@media (min-width: 64rem) {
+  .build-side {
+    position: sticky;
+    /* Clears the fixed navbar, so the card never slides under it. */
+    top: calc(var(--nav-h) + 1.5rem);
+  }
+}
+
+.recap {
+  border: 1px solid var(--ink);
+  background: var(--white);
+  padding: 1.25rem;
+}
+
+.recap-rows {
+  margin: 0 0 1rem;
+}
+
+.recap-rows > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--edge);
+}
+
+.recap-rows > div:last-child {
+  border-bottom: 0;
+}
+
+.recap-rows dt {
+  font-size: 0.9375rem;
+  color: var(--on-light-soft);
+}
+
+.recap-rows dd {
+  margin: 0;
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.recap-order {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--edge);
+  margin-bottom: 1rem;
+}
+
+.recap-order ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.9375rem;
+}
+
+.recap-order li {
+  padding: 0.125rem 0;
+}
+
+.recap-note {
+  font-size: 0.9375rem;
+  color: var(--on-light-soft);
+  margin: 0 0 1rem;
+}
+
+.recap-action {
+  padding-top: 1rem;
+  border-top: 1px solid var(--edge);
+}
+
+/* Signing in takes the submit's place rather than floating over the form. */
+.recap-signin-title {
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+.recap-signin .btn-block + .btn-block {
+  margin-top: 0.75rem;
+}
+
 /* -------------------------------------------------------------- steps */
 
 /*

@@ -110,15 +110,61 @@ const chainCode = (chainId: number) =>
       ? "ARC-TESTNET"
       : undefined;
 
+/**
+ * A failure the server has already classified. The raw Circle error stays on
+ * the server; what comes back is a message safe to show plus a reference that
+ * ties it to the logged line.
+ */
+export class CircleRequestError extends Error {
+  readonly kind: string;
+  readonly reference?: string;
+  constructor(message: string, kind: string, reference?: string) {
+    super(message);
+    this.name = "CircleRequestError";
+    this.kind = kind;
+    this.reference = reference;
+  }
+}
+
 async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(path, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await response.json()) as T & { message?: string };
-  if (!response.ok) throw new Error(data.message ?? "Request failed");
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // Never reached our own server — the browser is offline or blocked.
+    throw new CircleRequestError(
+      "We could not reach this site's server. Check your connection and try again.",
+      "network",
+    );
+  }
+
+  const data = (await response.json().catch(() => ({}))) as T & {
+    message?: string;
+    kind?: string;
+    reference?: string;
+  };
+  if (!response.ok) {
+    throw new CircleRequestError(
+      data.message ?? "Sign-in failed.",
+      data.kind ?? "unknown",
+      data.reference,
+    );
+  }
   return data;
+}
+
+/** The message plus its reference, which is what makes a report actionable. */
+export function describeCircleError(error: unknown): string {
+  if (error instanceof CircleRequestError) {
+    return error.reference
+      ? `${error.message} (reference ${error.reference})`
+      : error.message;
+  }
+  return "Sign-in failed. The full error is in this site's server log.";
 }
 
 export function CircleWalletProvider({
@@ -202,8 +248,32 @@ export function CircleWalletProvider({
         const onLogin = (error: unknown, result: unknown) => {
           if (cancelled) return;
           if (error) {
+            /*
+             * This one happens in the browser, so there is no server log to
+             * point at — the whole error goes to the console instead, and the
+             * message distinguishes the case that is not a fault at all.
+             */
+            console.error("[circle] social login failed", error);
+            const raw = error as { code?: number | string; message?: string };
+            const text = `${raw.code ?? ""} ${raw.message ?? ""}`.toLowerCase();
+
+            if (/cancel|closed|abort|denied|dismiss|popup/.test(text)) {
+              // Closing the Google window is a decision, not a failure.
+              setStatus("signed-out");
+              setMessage(undefined);
+              return;
+            }
+
             setStatus("error");
-            setMessage("Sign-in did not complete. Please try again.");
+            setMessage(
+              /app ?id|client ?id|redirect|origin|unauthorized|invalid/.test(text)
+                ? "Google sign-in is not set up correctly on this site — the app " +
+                  "id, Google client id or redirect address does not match. This " +
+                  "needs fixing by whoever deployed it. The full error is in the " +
+                  "browser console."
+                : "Google sign-in did not complete. The full error is in the " +
+                  "browser console.",
+            );
             return;
           }
           const { userToken, encryptionKey } = result as {

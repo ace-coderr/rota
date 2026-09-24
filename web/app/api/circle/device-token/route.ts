@@ -1,4 +1,5 @@
-import { circle, circleError } from "@/lib/server/circle";
+import { circle } from "@/lib/server/circle";
+import { circleFailure, statusFor } from "@/lib/server/circle-errors";
 
 /** Step 1 of social login: exchange a device id for a device token. */
 export async function POST(request: Request) {
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
       deviceEncryptionKey: response.data?.deviceEncryptionKey,
     });
   } catch (error) {
-    const { code, message } = circleError(error);
-    return Response.json({ code, message }, { status: 502 });
+    const failure = circleFailure("device-token", error);
+    return Response.json(failure, { status: statusFor(failure.kind) });
   }
 }

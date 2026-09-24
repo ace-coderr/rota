@@ -1,4 +1,5 @@
-import { circle, circleError } from "@/lib/server/circle";
+import { circle } from "@/lib/server/circle";
+import { circleFailure, statusFor } from "@/lib/server/circle-errors";
 
 /**
  * Creates a contract-execution challenge.
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
       challengeId: response.data?.challengeId,
     });
   } catch (error) {
-    const { code, message } = circleError(error);
-    return Response.json({ code, message }, { status: 502 });
+    const failure = circleFailure("execute", error);
+    return Response.json(failure, { status: statusFor(failure.kind) });
   }
 }

@@ -1,4 +1,5 @@
-import { circle, circleError } from "@/lib/server/circle";
+import { circle } from "@/lib/server/circle";
+import { circleFailure, statusFor } from "@/lib/server/circle-errors";
 
 /** Lists the signed-in user's wallets. Read-only. */
 export async function POST(request: Request) {
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
 
     return Response.json({ wallets });
   } catch (error) {
-    const { code, message } = circleError(error);
-    return Response.json({ code, message }, { status: 502 });
+    const failure = circleFailure("wallets", error);
+    return Response.json(failure, { status: statusFor(failure.kind) });
   }
 }

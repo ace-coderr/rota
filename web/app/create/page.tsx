@@ -273,7 +273,7 @@ export default function CreatePage() {
   }
 
   return (
-    <main className="sheet">
+    <main className="sheet sheet-wide">
       <Link href="/" className="back">
         ← Back
       </Link>
@@ -283,9 +283,18 @@ export default function CreatePage() {
         receive everyone else&rsquo;s share.
       </p>
 
-      <WalletBar reason="Connect your wallet to set up a circle." />
+      {/*
+        Two columns on a laptop: the decisions on the left, and what they add
+        up to on the right, where it stays in view while you work. One column
+        below that, which puts the summary directly above the button — the
+        same reading order, stacked.
 
-      <form onSubmit={onSubmit}>
+        Signing in is not a panel floating above the form. You can build the
+        whole circle first; the sign-in takes the submit's place at the moment
+        it is actually needed.
+      */}
+      <form onSubmit={onSubmit} className="build">
+        <div className="build-steps">
         {/* ------------------------------------------------ 01 the money */}
         <section className="step">
           <span className="step-n">01 — The money</span>
@@ -398,26 +407,92 @@ export default function CreatePage() {
           )}
         </section>
 
-        {/* ------------------------------------------------ the summary */}
-        {ready && (
-          <div className="summary">
-            <span>
-              {members.length} people
-            </span>
-            <span>{amount.trim()} USDC each</span>
-            <span>{everyInWords(BigInt(period))}</span>
-            {myTurn > 0 && <span>you’re paid {ordinal(myTurn)}</span>}
-          </div>
-        )}
+        </div>
 
-        <Button type="submit" size="lg" block disabled={!ready}>
-          {working ? "Creating your circle…" : "Create this circle"}
-        </Button>
-        <p className="action-note">
-          {!isConnected
-            ? "Connect your wallet first."
-            : "This just sets up the circle. No money moves, and nobody is charged."}
-        </p>
+        <aside className="build-side">
+          <div className="recap">
+            <span className="step-n">Your circle</span>
+
+            <dl className="recap-rows">
+              <div>
+                <dt>Each person puts in</dt>
+                <dd>{amountValid ? `${amount.trim()} USDC` : "—"}</dd>
+              </div>
+              <div>
+                <dt>How often</dt>
+                <dd>{everyInWords(BigInt(period))}</dd>
+              </div>
+              <div>
+                <dt>People</dt>
+                <dd>{members.length || "—"}</dd>
+              </div>
+              <div>
+                <dt>Each person needs</dt>
+                <dd>
+                  {perPerson !== undefined && decimals !== undefined
+                    ? `${Number(formatUnits(perPerson, decimals)).toLocaleString(
+                        undefined,
+                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+                      )} USDC`
+                    : "—"}
+                </dd>
+              </div>
+              {myTurn > 0 && (
+                <div>
+                  <dt>You are paid</dt>
+                  <dd>{ordinal(myTurn)}</dd>
+                </div>
+              )}
+            </dl>
+
+            {entries.length > 0 && (
+              <div className="recap-order">
+                <span className="order-label">Payout order</span>
+                <ol>
+                  {entries.map((entry, i) => (
+                    <li key={`recap-${entry.address}-${i}`}>
+                      {entry.name ||
+                        (you && entry.address.toLowerCase() === you.toLowerCase()
+                          ? "You"
+                          : `${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`)}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+
+            {firstPayout && enoughPeople && (
+              <p className="recap-note">
+                First payout {onDay(firstPayout)}
+                {lastPayout ? `, last ${onDay(lastPayout)}` : ""}.
+              </p>
+            )}
+
+            <div className="recap-action">
+              {isConnected ? (
+                <>
+                  <Button type="submit" size="lg" block disabled={!ready}>
+                    {working ? "Creating your circle…" : "Create this circle"}
+                  </Button>
+                  <p className="action-note">
+                    This just sets up the circle. No money moves, and nobody is
+                    charged.
+                  </p>
+                </>
+              ) : (
+                <div className="recap-signin">
+                  <p className="recap-signin-title">
+                    Sign in to create this circle
+                  </p>
+                  <WalletBar bare reason="" />
+                  <p className="action-note">
+                    Nothing you have typed is lost, and nothing is charged.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </aside>
       </form>
 
       <ErrorNotice failure={failure ?? networkFailure} />

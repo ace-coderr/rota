@@ -1,4 +1,9 @@
-import { circle, circleError, circleBlockchain } from "@/lib/server/circle";
+import { circle, circleBlockchain } from "@/lib/server/circle";
+import {
+  circleCodeOf,
+  circleFailure,
+  statusFor,
+} from "@/lib/server/circle-errors";
 
 /**
  * Creates the user's wallet on the chain they are using. Returns a challenge
@@ -28,9 +33,12 @@ export async function POST(request: Request) {
 
     return Response.json({ challengeId: response.data?.challengeId });
   } catch (error) {
-    const { code, message } = circleError(error);
-    // Already initialised: the caller should list wallets instead.
-    if (code === 155106) return Response.json({ code, message });
-    return Response.json({ code, message }, { status: 502 });
+    // Already initialised is not a failure: the caller lists wallets instead.
+    // Checked before reporting, so it never reaches the log as an error.
+    const code = circleCodeOf(error);
+    if (code === 155106) return Response.json({ code, alreadyInitialised: true });
+
+    const failure = circleFailure("initialize", error);
+    return Response.json(failure, { status: statusFor(failure.kind) });
   }
 }

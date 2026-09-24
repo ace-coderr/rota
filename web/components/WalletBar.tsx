@@ -8,6 +8,7 @@ import { DEFAULT_DEPLOYMENT, deploymentFor } from "@/lib/deployments";
 import { shortAddress } from "@/lib/format";
 import {
   circleConfigured,
+  describeCircleError,
   googleConfigured,
   useCircleWallet,
 } from "@/lib/wallet/circle";
@@ -18,7 +19,17 @@ import {
  * Circle user-controlled wallet — the member holds the keys, and every action
  * is approved by them, never by us.
  */
-export function WalletBar({ reason }: { reason?: string }) {
+export function WalletBar({
+  reason,
+  bare = false,
+}: {
+  reason?: string;
+  /**
+   * Render without the card wrapper, for when this already sits inside one.
+   * A card inside a card reads as a dialogue that failed to open.
+   */
+  bare?: boolean;
+}) {
   const { address, chainId, isConnected } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -43,9 +54,13 @@ export function WalletBar({ reason }: { reason?: string }) {
     try {
       await run();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "That didn’t work. Please try again.",
-      );
+      /*
+       * describeCircleError keeps the server's classification and appends the
+       * reference, so a report of "it failed" can be matched to the logged
+       * line. Anything else falls back, but the raw text of an unknown error
+       * is still never shown.
+       */
+      setError(describeCircleError(err));
     } finally {
       setBusy(undefined);
     }
@@ -92,7 +107,7 @@ export function WalletBar({ reason }: { reason?: string }) {
 
   if (circle.status === "awaiting-otp") {
     return (
-      <div className="card card-quiet">
+      <div className={bare ? "" : "card card-quiet"}>
         <p style={{ marginBottom: "1rem" }}>
           We’ve emailed you a code. Enter it to finish signing in.
         </p>
@@ -119,7 +134,7 @@ export function WalletBar({ reason }: { reason?: string }) {
   // ------------------------------------------------------------ signed out
 
   return (
-    <div className="card card-quiet">
+    <div className={bare ? "" : "card card-quiet"}>
       <p style={{ marginBottom: "1rem" }}>
         {reason ?? "Sign in to see your circle."}
       </p>
