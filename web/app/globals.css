@@ -78,6 +78,14 @@
   /* The fixed navbar's real height, hairline included: 36px control + 2 x
      0.875rem padding + 1px border. Wider screens pad it to 69px. */
   --nav-h: 65px;
+
+  /*
+   * How long a control takes to answer being touched. One value, because a
+   * form where the input settles at one speed and its submit at another
+   * reads as two components that happened to end up on the same page. Short
+   * enough to feel like a response and not a transition.
+   */
+  --tap: 150ms;
 }
 
 * {
@@ -114,10 +122,21 @@ td,
   font-weight: 700;
   text-transform: uppercase;
   line-height: 0.92;
-  letter-spacing: -0.01em;
   margin: 0;
   /* Huge, but never wider than a phone. */
   font-size: clamp(2.75rem, 13vw, 7rem);
+
+  /*
+   * Tracking tightens as the type grows: about -0.005em at 44px and -0.03em
+   * at 112px. A single em value cannot do this, because em tracking is a
+   * fixed proportion of the size — it looks slack at the top of the range or
+   * cramped at the bottom, and condensed display faces want the opposite.
+   *
+   * The px term is the intercept of a straight line through those two
+   * points, and the em term is its slope, so this needs no clamp of its own:
+   * font-size is already clamped, so the result is too.
+   */
+  letter-spacing: calc(1.8px - 0.046em);
 }
 
 .display-sm {
@@ -177,6 +196,20 @@ a.back {
 .small {
   font-size: 1rem;
   line-height: 1.5;
+}
+
+/* Said aloud, not shown. Used where the visible version of the same fact is
+   a skeleton or a shape, which a screen reader cannot read. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* ===================================================================
@@ -392,9 +425,9 @@ main.sheet {
   text-decoration: none;
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    color 140ms ease;
+    background-color var(--tap) ease,
+    border-color var(--tap) ease,
+    color var(--tap) ease;
 }
 
 /*
@@ -572,6 +605,13 @@ select {
   border-radius: 0;
   background: var(--white);
   color: var(--ink);
+  /* The money screens get no decorative motion at all. This is the whole of
+     it: a field that has just turned invalid changes colour over a beat
+     rather than between two frames, so the change is noticed rather than
+     just found to have happened. */
+  transition:
+    border-color var(--tap) ease,
+    background-color var(--tap) ease;
 }
 
 input:focus-visible,
@@ -704,10 +744,19 @@ main.sheet-wide {
   }
 }
 
+/*
+ * A hairline and one soft shadow, and that is the whole of the depth on this
+ * page. The card is sticky, so it passes over the form as you scroll; without
+ * some separation the two sets of borders slide through each other and the
+ * eye cannot tell which layer it is reading.
+ */
 .recap {
   border: 1px solid var(--ink);
   background: var(--white);
   padding: 1.25rem;
+  box-shadow:
+    0 1px 0 rgba(10, 10, 10, 0.03),
+    0 12px 32px -20px rgba(10, 10, 10, 0.4);
 }
 
 .recap-rows {
@@ -943,6 +992,13 @@ main.sheet-wide {
   line-height: 1;
 }
 
+.row-btn {
+  transition:
+    background-color var(--tap) ease,
+    border-color var(--tap) ease,
+    color var(--tap) ease;
+}
+
 .row-btn:hover:not(:disabled) {
   background: var(--btn-wash);
 }
@@ -1019,6 +1075,45 @@ main.sheet-wide {
   color: var(--on-light-soft);
 }
 
+/* ---------------------------------------------------------- skeletons */
+
+/*
+ * The shape of the answer, while it is being read from the chain.
+ *
+ * These exist to hold the room, not to entertain: the circle screen used to
+ * show one line of "Loading…" and then replace it with a heading, a summary,
+ * a wallet bar and a list of people, which moved everything several hundred
+ * pixels at the exact moment someone was reaching for it. A skeleton that is
+ * a different size from the content it stands in for is worse than none.
+ */
+.skel {
+  display: block;
+  background: var(--edge);
+  border-radius: 0;
+  animation: skel 1.4s ease-in-out infinite;
+}
+
+.skel-text {
+  height: 1.05em;
+  max-width: 100%;
+}
+
+.skel-small {
+  height: 0.8em;
+  margin-top: 0.45rem;
+  opacity: 0.6;
+}
+
+@keyframes skel {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
 /* ------------------------------------------------------------ notices */
 
 .notice {
@@ -1056,6 +1151,25 @@ main.sheet-wide {
 .notice-calm {
   border-color: var(--blue);
   background: #eceeff;
+}
+
+/*
+ * A transaction that worked, said once and then withdrawn.
+ *
+ * Everything else on the circle screen is read back from the chain, so after
+ * a confirmation the page simply looks different and there is no moment that
+ * says "that was you, and it worked" — which is the moment someone is least
+ * sure, having just approved something with their money attached.
+ */
+.notice.is-done {
+  animation: arrive 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
 }
 
 /* ------------------------------------------------------------- people */
@@ -1172,5 +1286,19 @@ main.sheet-wide {
     padding-left: 1.5rem;
     padding-right: 1.5rem;
     padding-bottom: 6rem;
+  }
+}
+
+/*
+ * Nothing in the plain volume moves for decoration, so this is short: the
+ * skeleton stops breathing and the success notice appears rather than
+ * arrives. The control transitions are left alone deliberately — a 150ms
+ * border colour is feedback, not motion, and removing it takes information
+ * away rather than discomfort.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .skel,
+  .notice.is-done {
+    animation: none;
   }
 }

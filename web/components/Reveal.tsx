@@ -1,10 +1,15 @@
 "use client";
 
 import {
+  Children,
+  cloneElement,
+  isValidElement,
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
+  type ReactElement,
   type ReactNode,
 } from "react";
 
@@ -25,19 +30,16 @@ function useIsomorphicLayoutEffect() {
   return typeof window === "undefined" ? useEffect : useLayoutEffect;
 }
 
-export function Reveal({
-  children,
-  as: Tag = "div",
-  className = "",
-  delay = 0,
-}: {
-  children: ReactNode;
-  as?: "div" | "section" | "li";
-  className?: string;
-  delay?: number;
-}) {
+/**
+ * Arms, then watches. Returns [ref, armed, shown].
+ *
+ * `armed` is the safety catch: it is only ever true once there is a working
+ * observer AND the reader has not asked for less motion, so every rule that
+ * hides something can be written to depend on it. Nothing in this file may
+ * hide content that it is not already certain it can show again.
+ */
+function useOnFirstSight() {
   const ref = useRef<HTMLElement | null>(null);
-  // Unarmed means "plain, visible content" — the safe default.
   const [armed, setArmed] = useState(false);
   const [shown, setShown] = useState(false);
 
@@ -99,6 +101,22 @@ export function Reveal({
     };
   }, [armed]);
 
+  return [ref, armed, shown] as const;
+}
+
+export function Reveal({
+  children,
+  as: Tag = "div",
+  className = "",
+  delay = 0,
+}: {
+  children: ReactNode;
+  as?: "div" | "section" | "li";
+  className?: string;
+  delay?: number;
+}) {
+  const [ref, armed, shown] = useOnFirstSight();
+
   /*
    * Inline, not a class. A stylesheet rule for this was silently losing the
    * cascade once Tailwind layered the imported file, which left elements
@@ -106,7 +124,7 @@ export function Reveal({
    * have left them hidden and never shown. Owning the two properties here
    * means nothing else can change what this component does.
    */
-  const style: React.CSSProperties | undefined = armed
+  const style: CSSProperties | undefined = armed
     ? {
         opacity: shown ? 1 : 0,
         transform: shown ? "none" : "translateY(16px)",
@@ -116,9 +134,73 @@ export function Reveal({
       }
     : undefined;
 
+  /*
+   * The two hooks anything inside can style against — a number that slides up
+   * with its card, a tick that draws itself. Both are needed: `data-armed`
+   * says a hidden starting state is safe to apply at all, and `data-shown`
+   * says to play. A rule written against `data-shown` alone would leave its
+   * element stuck in the hidden state forever on a browser without an
+   * observer, which is exactly the failure this component exists to avoid.
+   */
   return (
-    <Tag ref={ref as never} className={className || undefined} style={style}>
+    <Tag
+      ref={ref as never}
+      className={className || undefined}
+      style={style}
+      data-armed={armed ? "" : undefined}
+      data-shown={shown ? "" : undefined}
+    >
       {children}
+    </Tag>
+  );
+}
+
+/**
+ * The same reveal, but the children arrive one after another.
+ *
+ * A grid of three cards fading as one block reads as a page that was slow to
+ * load. The same three 60ms apart reads as a list being set down. The
+ * container is what is watched, so they stagger in document order from one
+ * moment rather than each waiting for its own edge to cross the fold — which
+ * on a wide screen would fire them all together anyway.
+ *
+ * Children are cloned rather than wrapped: wrapping each one in a div would
+ * put a box between a grid and its items and quietly break every layout this
+ * is used in.
+ */
+export function Stagger({
+  children,
+  as: Tag = "div",
+  className = "",
+  step = 60,
+}: {
+  children: ReactNode;
+  as?: "div" | "ul" | "ol";
+  className?: string;
+  step?: number;
+}) {
+  const [ref, armed, shown] = useOnFirstSight();
+
+  return (
+    <Tag
+      ref={ref as never}
+      className={className || undefined}
+      data-armed={armed ? "" : undefined}
+      data-shown={shown ? "" : undefined}
+    >
+      {Children.map(children, (child, index) => {
+        if (!armed || !isValidElement(child)) return child;
+        const element = child as ReactElement<{ style?: CSSProperties }>;
+        return cloneElement(element, {
+          style: {
+            ...(element.props.style ?? {}),
+            opacity: shown ? 1 : 0,
+            transform: shown ? "none" : "translateY(14px)",
+            transition: "opacity 420ms ease, transform 420ms ease",
+            transitionDelay: shown ? `${index * step}ms` : undefined,
+          },
+        });
+      })}
     </Tag>
   );
 }
@@ -129,13 +211,21 @@ export function Reveal({
  * Also fails visible: the state starts at the real value, so if the animation
  * never runs the correct number is on screen. A figure people are being asked
  * to trust must never be able to render as a stale zero.
+ *
+ * `from` is where the count starts. It defaults to zero — the ordinary count
+ * up — but /proof passes the size of the pot a circle would have had, so the
+ * number falls out of that and lands on nothing. The figure performs the
+ * claim the page is making, and the value it settles on is always the one
+ * read from the chain.
  */
 export function CountUp({
   value,
+  from = 0,
   decimals = 2,
   duration = 900,
 }: {
   value: number;
+  from?: number;
   decimals?: number;
   duration?: number;
 }) {
@@ -156,6 +246,7 @@ export function CountUp({
     }
 
     let frame = 0;
+    let settle = 0;
     let started = false;
 
     const run = () => {
@@ -168,11 +259,29 @@ export function CountUp({
       const step = (now: number) => {
         const progress = Math.min(1, (now - start) / duration);
         // Ease out, so it lands rather than stops.
-        setShown(value * (1 - Math.pow(1 - progress, 3)));
+        const eased = 1 - Math.pow(1 - progress, 3);
+        setShown(from + (value - from) * eased);
         if (progress < 1) frame = requestAnimationFrame(step);
       };
-      setShown(0);
+
+      /*
+       * The animation is allowed to be interrupted; the figure is not allowed
+       * to be wrong.
+       *
+       * requestAnimationFrame does not run at all in a hidden or backgrounded
+       * tab, so an animation started just before someone switched away stops
+       * on whatever frame it reached and stays there. That is survivable when
+       * counting up from nothing and serious when counting DOWN from the size
+       * of a pot: /proof would sit there showing a few USDC as Rota's holding,
+       * which is the one number on the site that has to be right.
+       *
+       * A timer is the backstop. Background tabs clamp timers to about a
+       * second but they do still fire, so the real value lands either way and
+       * the animation is only ever the nicer of the two paths.
+       */
+      setShown(from);
       frame = requestAnimationFrame(step);
+      settle = window.setTimeout(() => setShown(value), duration + 400);
     };
 
     const onScroll = () => {
@@ -192,8 +301,9 @@ export function CountUp({
       observer.disconnect();
       window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
+      window.clearTimeout(settle);
     };
-  }, [value, duration]);
+  }, [value, from, duration]);
 
   return (
     <span ref={ref}>

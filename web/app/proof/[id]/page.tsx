@@ -7,6 +7,8 @@ import type { Address } from "viem";
 
 import { NOTHING_CONFIGURED, deploymentFor } from "@/lib/deployments";
 import { ConfigNotice } from "@/components/ConfigNotice";
+import { CountUp } from "@/components/Reveal";
+import { TurnRing } from "@/components/TurnRing";
 import { addressUrl, txUrl } from "@/lib/explorer";
 import { dateInWords, money, shortAddress } from "@/lib/format";
 import { turnsFromState, useDisbursementLinks, withLinks } from "@/lib/history";
@@ -99,6 +101,33 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   );
   const rows = withLinks(turns, links.data);
 
+  /*
+   * What one person would have been holding.
+   *
+   * Every other savings circle has a pot: each round, one person collects
+   * everyone ELSE'S share and holds it until they hand it over. So the pot is
+   * the contribution times one fewer than the members — the same figure the
+   * rest of the app calls the payout, because it is the same money. Counting
+   * down from members x contribution would name a larger pot than this circle
+   * has ever moved, and the number the page exists to make trustworthy is not
+   * the place to round up.
+   *
+   * The figure it LANDS on is always the balance read from the chain. The
+   * count is a way of showing what the zero means, not a way of arriving at
+   * it: if the animation never runs, or the reader has asked for less motion,
+   * the real number is on screen from the first paint.
+   */
+  const pot =
+    decimals !== undefined && contribution > 0n && memberList.length > 1
+      ? Number(contribution * BigInt(memberList.length - 1)) /
+        10 ** (decimals as number)
+      : undefined;
+
+  const holding =
+    rotaBalance !== undefined && decimals !== undefined
+      ? Number(rotaBalance as bigint) / 10 ** (decimals as number)
+      : undefined;
+
   if (!deployment) {
     return (
       <main className="sheet">
@@ -130,11 +159,25 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
             Rota is holding / circle {id} / {deployment.label}
           </span>
           <p className="figure">
-            {balance.isLoading || rotaBalance === undefined
-              ? "—"
-              : money(rotaBalance as bigint, decimals as number)}{" "}
+            {balance.isLoading || holding === undefined ? (
+              "\u2014"
+            ) : (
+              <CountUp value={holding} from={pot ?? 0} duration={2200} />
+            )}{" "}
             <span className="figure-unit">USDC</span>
           </p>
+          {pot !== undefined && (
+            <p className="figure-note">
+              That counts down from{" "}
+              {pot.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              USDC — the pot one person would be holding if this circle worked
+              the way the others do. It lands on nothing because there is no
+              pot.
+            </p>
+          )}
         </div>
       </header>
 
@@ -211,11 +254,16 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
 
       {rows.length > 0 && (
         <>
-          <div className="card">
+          <ol className="timeline">
             {rows.map((turn) => (
-              <div className="person" key={turn.index}>
-                <span className="person-turn">{turn.index + 1}.</span>
-                <span>
+              <li className="turn" key={turn.index}>
+                {/* The ring as it stood that round: same circle, solid dot one
+                    seat further on. Six turns read as six drawings. */}
+                <span className="turn-mark">
+                  <TurnRing seats={memberList.length} active={turn.index} />
+                  <span className="turn-n">{turn.index + 1}</span>
+                </span>
+                <span className="turn-body">
                   <span className="person-name">
                     {naming.nameOf(turn.recipient)} received{" "}
                     {money(turn.amount, decimals as number | undefined)} USDC
@@ -248,9 +296,9 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
                     )}
                   </span>
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
+          </ol>
 
         </>
       )}

@@ -120,48 +120,6 @@
   gap: 0.5rem;
 }
 
-.nav-panel {
-  --focus-ring: var(--blue);
-  --btn-wash: rgba(10, 10, 10, 0.08);
-  --warn: #9a5b00;
-}
-
-/* Holds the lockup, which draws itself in currentColor. */
-.nav-mark {
-  display: flex;
-  align-items: center;
-  color: inherit;
-  text-decoration: none;
-  margin-right: auto;
-}
-
-.nav-links {
-  display: none;
-  gap: 1.5rem;
-  align-items: center;
-}
-
-.nav-link {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: inherit;
-  text-decoration: none;
-  padding: 0.25rem 0;
-  border-bottom: 1px solid transparent;
-}
-
-.nav-link:hover {
-  border-bottom-color: currentColor;
-}
-
-.nav-wallet {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 .chip {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.6875rem;
@@ -474,14 +432,38 @@
 
 /* ------------------------------------------------------------- section */
 
+/*
+ * The rule over a section head runs off both sides of the page.
+ *
+ * A hairline that stops where the text column stops draws a box around the
+ * argument; one that carries on past it says the page continues and this is
+ * a division within it. The band clips the overflow — `clip` rather than
+ * `hidden`, because `hidden` would turn every band into a scroll container
+ * and break any sticky positioning inside one.
+ */
 .section-head {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 2rem;
   align-items: baseline;
-  border-top: 1px solid currentColor;
   padding-top: 1rem;
   margin-bottom: 2.5rem;
+}
+
+.section-head::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  margin-left: -50vw;
+  border-top: 1px solid currentColor;
+  pointer-events: none;
+}
+
+.band {
+  overflow-x: clip;
 }
 
 .section-marker {
@@ -520,14 +502,44 @@
   transform: translateY(-4px);
 }
 
+/*
+ * The number slides up out of its own line, masked by the box it sits in.
+ * Both halves are conditional on data-armed, which Reveal/Stagger only set
+ * once they are certain they can show the content again — so a browser with
+ * no observer, or a reader who has asked for less motion, gets three numbers
+ * sitting still rather than three empty cards.
+ */
 .numbered-n {
   font-family: var(--font-display), system-ui, sans-serif;
   font-size: 3.5rem;
   line-height: 1;
   font-weight: 700;
   display: block;
+  overflow: hidden;
   margin-bottom: 1rem;
   color: var(--blue);
+}
+
+.numbered-slide {
+  display: block;
+}
+
+[data-armed] .numbered-slide {
+  transform: translateY(105%);
+}
+
+[data-shown] .numbered-slide {
+  transform: translateY(0);
+  transition: transform 560ms cubic-bezier(0.22, 1, 0.36, 1) 140ms;
+}
+
+/* Each number follows its own card in, not all three at the first one. */
+.card-grid[data-shown] > *:nth-child(2) .numbered-slide {
+  transition-delay: 200ms;
+}
+
+.card-grid[data-shown] > *:nth-child(3) .numbered-slide {
+  transition-delay: 260ms;
 }
 
 .band-dark .numbered-n {
@@ -611,6 +623,51 @@
   line-height: 1.4;
 }
 
+.mark-glyph {
+  display: block;
+  width: 1.125rem;
+  height: 1.125rem;
+  margin-top: 0.3rem;
+  overflow: visible;
+}
+
+.mark-draw {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: square;
+}
+
+/*
+ * Each mark draws itself along its own path. pathLength={1} on the element
+ * normalises every path to a length of 1, so one dash pair covers a two-line
+ * cross and a three-point tick without either being measured.
+ */
+[data-armed] .mark-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+[data-shown] .mark-draw {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 380ms cubic-bezier(0.65, 0, 0.35, 1)
+    var(--draw-at, 200ms);
+}
+
+/* The second stroke of a cross follows the first rather than crossing it at
+   the same moment, which is the difference between drawn and stamped. */
+[data-shown] .mark-draw-late {
+  transition-delay: calc(var(--draw-at, 200ms) + 150ms);
+}
+
+.marks li:nth-child(2) {
+  --draw-at: 300ms;
+}
+
+.marks li:nth-child(3) {
+  --draw-at: 400ms;
+}
+
 .mark-no {
   color: #a3200f;
 }
@@ -692,8 +749,78 @@
   }
 }
 
+/*
+ * THE CLOCK. One 6s round, eight rounds to a lap.
+ *
+ *   0.0s  the money leaves, nearest pairs first
+ *   2.5s  it lands, and the seat takes the weight
+ *   2.6s  two rings out of the seat
+ *   5.0s  the turn passes: the fan rotates 45° over one second
+ *
+ * 48s is exactly eight 6s cycles, which is the whole reason the rotation is
+ * an animation rather than a timer. Two CSS animations on the same element
+ * tree share one clock and cannot drift; a JS interval and a CSS animation
+ * can, and do, the moment the tab is backgrounded.
+ */
+
+/* Leans toward the pointer. --tilt is written by CircleRing, straight to the
+   wrapper, so a mouse move costs one property write and no React render. */
+.ring-lean {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transform: rotate(var(--tilt, 0deg));
+  transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ring-fan {
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  animation: turn 48s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+/* Holds each angle for five seconds, then eases the last second into the
+   next seat. The flat pairs are the hold; the gap between them is the move. */
+@keyframes turn {
+  0%,
+  10.417% {
+    transform: rotate(0deg);
+  }
+  12.5%,
+  22.917% {
+    transform: rotate(45deg);
+  }
+  25%,
+  35.417% {
+    transform: rotate(90deg);
+  }
+  37.5%,
+  47.917% {
+    transform: rotate(135deg);
+  }
+  50%,
+  60.417% {
+    transform: rotate(180deg);
+  }
+  62.5%,
+  72.917% {
+    transform: rotate(225deg);
+  }
+  75%,
+  85.417% {
+    transform: rotate(270deg);
+  }
+  87.5%,
+  97.917% {
+    transform: rotate(315deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 .token {
-  animation: travel 3s cubic-bezier(0.4, 0, 0.5, 1) infinite;
+  opacity: 0;
+  animation: travel 6s cubic-bezier(0.5, 0, 0.25, 1) infinite;
 }
 
 @keyframes travel {
@@ -701,34 +828,93 @@
     transform: translate(0, 0);
     opacity: 0;
   }
-  8% {
+  4% {
+    transform: translate(0, 0);
     opacity: 1;
   }
-  70% {
+  42% {
     transform: translate(var(--dx), var(--dy));
     opacity: 1;
   }
-  80%,
+  47% {
+    opacity: 0;
+  }
   100% {
     transform: translate(var(--dx), var(--dy));
     opacity: 0;
   }
 }
 
-.pulse {
-  animation: pulse 3s ease-in-out infinite;
-  transform-origin: center;
+/* The spoke brightens under the money crossing it, and settles back. */
+.spoke {
+  stroke-opacity: 0.1;
+  animation: spoke 6s ease-in-out infinite;
 }
 
-@keyframes pulse {
+@keyframes spoke {
   0%,
-  100% {
-    opacity: 0.25;
-    r: 26;
+  4% {
+    stroke-opacity: 0.1;
   }
-  60% {
-    opacity: 0.6;
-    r: 32;
+  32% {
+    stroke-opacity: 0.26;
+  }
+  56%,
+  100% {
+    stroke-opacity: 0.1;
+  }
+}
+
+/* Arrival, as weight rather than glow: the seat takes the money and settles. */
+.seat-live {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: seat-land 6s cubic-bezier(0.34, 1.4, 0.64, 1) infinite;
+}
+
+@keyframes seat-land {
+  0%,
+  38% {
+    transform: scale(1);
+  }
+  47% {
+    transform: scale(1.3);
+  }
+  62%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+/*
+ * Two concentric rings out of the seat on arrival. Scaled, not re-radiused:
+ * `r` is a geometry property and animating it repaints, where a transform is
+ * handed to the compositor and costs the main thread nothing.
+ */
+.ripple {
+  transform-box: fill-box;
+  transform-origin: center;
+  opacity: 0;
+  animation: ripple 6s cubic-bezier(0.2, 0.8, 0.3, 1) infinite;
+}
+
+.ripple-late {
+  animation-delay: 380ms;
+}
+
+@keyframes ripple {
+  0%,
+  40% {
+    transform: scale(0.28);
+    opacity: 0;
+  }
+  45% {
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(1);
+    opacity: 0;
   }
 }
 
@@ -801,27 +987,16 @@
 
 /* -------------------------------------------------------------- motion */
 
-.reveal {
-  opacity: 0;
-  transform: translateY(16px);
-  transition:
-    opacity 360ms ease,
-    transform 360ms ease;
-}
-
-.reveal-in {
-  opacity: 1;
-  transform: none;
-}
-
+/*
+ * Everything decorative, off.
+ *
+ * Reveal and Stagger already stand down on their own — they never arm, so
+ * nothing they touch is ever hidden — which leaves the animations that run
+ * without them. The ring keeps its drawing and loses its motion: the tokens
+ * stay put on the members they belong to, which is still a true picture of
+ * the thing, and the highlight stays on one seat.
+ */
 @media (prefers-reduced-motion: reduce) {
-  .reveal,
-  .reveal-in {
-    opacity: 1;
-    transform: none;
-    transition: none;
-  }
-
   .numbered,
   .nav {
     transition: none;
@@ -831,9 +1006,27 @@
     transform: none;
   }
 
+  .ring-lean,
+  .ring-fan,
   .token,
-  .pulse {
+  .spoke,
+  .seat-live,
+  .ripple {
     animation: none;
+    transition: none;
+  }
+
+  .token {
+    opacity: 1;
+  }
+
+  .spoke {
+    stroke-opacity: 0.16;
+  }
+
+  [data-shown] .numbered-slide,
+  [data-shown] .mark-draw {
+    transition: none;
   }
 }
 
@@ -843,6 +1036,104 @@
   color: var(--blue);
 }
 
+/*
+ * One word cut out of the page rather than set on it.
+ *
+ * Guarded twice. The @supports test keeps it off any browser without
+ * text-stroke, where `color: transparent` would simply delete the word; and
+ * it is scoped to dark surfaces, because the stroke colour has to be named
+ * explicitly — currentColor resolves against the element's own colour, which
+ * is the transparent one, so it would paint nothing at all.
+ */
+@supports (-webkit-text-stroke-width: 1px) {
+  .band-dark .display-outline,
+  .hero .display-outline {
+    color: transparent;
+    -webkit-text-stroke-color: var(--cream);
+    -webkit-text-stroke-width: clamp(1px, 0.22vw, 2.25px);
+  }
+}
+
 .band-cream .display em {
   color: var(--blue);
+}
+
+/* ------------------------------------------------------- rotation record */
+
+/*
+ * Each turn drawn as the ring it was: same circle, solid dot one seat
+ * further round. Six turns are six drawings of the same shape, so the
+ * rotation is legible before a word of it is read.
+ */
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.turn {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 0 1.125rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid rgba(240, 238, 233, 0.18);
+}
+
+.turn:last-child {
+  border-bottom: 0;
+}
+
+/* The thread between one turn and the next. */
+.turn::after {
+  content: "";
+  position: absolute;
+  left: 19px;
+  top: calc(1.25rem + 46px);
+  bottom: 0;
+  border-left: 1px solid currentColor;
+  opacity: 0.18;
+}
+
+.turn:last-child::after {
+  display: none;
+}
+
+.turn-mark {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.turn-ring {
+  display: block;
+}
+
+/* The turn number sits in the middle of its own ring. */
+.turn-n {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
+.turn-body {
+  min-width: 0;
+  align-self: center;
+}
+
+/* What the big number counted down FROM, and why. */
+.figure-note {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  max-width: 34rem;
+  margin: 1.75rem 0 0;
+  opacity: 0.78;
 }

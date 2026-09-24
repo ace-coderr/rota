@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use, useState } from "react";
+import { use, useEffect, useState } from "react";
 import type { Address } from "viem";
 import { useAccount, useBlock, useGasPrice } from "wagmi";
 
@@ -69,6 +69,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const naming = useNames(id, members);
   const [failure, setFailure] = useState<TxFailure | undefined>();
   const [pending, setPending] = useState<string | undefined>();
+  const [done, setDone] = useState<string | undefined>();
   const [showNames, setShowNames] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
 
@@ -203,11 +204,29 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   const busy = pending !== undefined;
 
+  /*
+   * A transaction that worked should say so, and then stop saying so.
+   *
+   * Everything else on this screen is read from the chain, so once the
+   * refetch lands the page simply looks different and there is no moment that
+   * confirms what YOU just did — which is the moment someone is least sure,
+   * because they have just approved something with money attached. The notice
+   * is written before the refetch, so it names the person who was paid rather
+   * than the one who is next.
+   */
+  useEffect(() => {
+    if (!done) return;
+    const timer = window.setTimeout(() => setDone(undefined), 6000);
+    return () => window.clearTimeout(timer);
+  }, [done]);
+
   async function run(
     label: string,
+    confirmed: string,
     ...calls: Parameters<typeof wallet.send>[0][]
   ) {
     setFailure(undefined);
+    setDone(undefined);
     if (networkFailure) {
       setFailure(networkFailure);
       return;
@@ -225,6 +244,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         await wallet.send(call, deployment!.chain.id);
       }
       await refetchAll();
+      setDone(confirmed);
     } catch (error) {
       setFailure(
         classifyTxError(error, {
@@ -294,11 +314,43 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   // Narrowed once, so the callbacks below do not each have to re-prove it.
   const rota: Address = ROTA_ADDRESS;
 
+  /*
+   * The shape of the answer, while the chain is being read.
+   *
+   * "Loading…" is one line, and what replaces it is a heading, a summary, a
+   * wallet bar and a list of people — so the page jumped several hundred
+   * pixels the moment the reads landed, usually just as someone had started
+   * to move their thumb. The skeleton occupies the same room the real content
+   * will, so nothing under the cursor moves.
+   */
   if (isLoading && !circle) {
     return (
-      <main className="sheet">
+      <main className="sheet" aria-busy="true">
+        <Link href="/" className="back">
+          ← Back
+        </Link>
         <h1>Circle {id}</h1>
-        <p className="muted">Loading…</p>
+        <p className="sr-only" role="status">
+          Reading this circle from the chain.
+        </p>
+        <p className="lede" aria-hidden="true">
+          <span className="skel skel-text" style={{ width: "17rem" }} />
+        </p>
+
+        <div className="card" aria-hidden="true">
+          {[0, 1, 2].map((row) => (
+            <div className="person" key={row}>
+              <span className="person-turn">{row + 1}.</span>
+              <span style={{ flex: 1 }}>
+                <span className="skel skel-text" style={{ width: "8rem" }} />
+                <span
+                  className="skel skel-text skel-small"
+                  style={{ width: "6.5rem" }}
+                />
+              </span>
+            </div>
+          ))}
+        </div>
       </main>
     );
   }
@@ -446,6 +498,7 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           onClick={() =>
             run(
               "join",
+              "You\u2019re in. Your share stays in your wallet until your turn comes round.",
               {
                 address: USDC_ADDRESS,
                 abi: ERC20_ABI,
@@ -478,12 +531,16 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           block
           disabled={busy}
           onClick={() =>
-            run("start", {
-              address: rota,
-              abi: ROTA_ABI,
-              functionName: "start",
-              args: [circleId],
-            })
+            run(
+              "start",
+              `The circle has started. ${standings[0]?.name ?? "The first person"} is first.`,
+              {
+                address: rota,
+                abi: ROTA_ABI,
+                functionName: "start",
+                args: [circleId],
+              },
+            )
           }
         >
           {pending === "start" ? "Starting…" : "Start the circle"}
@@ -502,12 +559,16 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           block
           disabled={busy}
           onClick={() =>
-            run("pay", {
-              address: rota,
-              abi: ROTA_ABI,
-              functionName: "disburse",
-              args: [circleId],
-            })
+            run(
+              "pay",
+              `Sent. ${standings[cycleIndex]?.name ?? "They"} received ${money(payout, decimals)} USDC, straight from everyone\u2019s wallets.`,
+              {
+                address: rota,
+                abi: ROTA_ABI,
+                functionName: "disburse",
+                args: [circleId],
+              },
+            )
           }
         >
           {pending === "pay"
@@ -681,6 +742,13 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
         </div>
       )}
 
+      {done && (
+        <div className="notice notice-calm is-done" role="status">
+          <p className="notice-title">That worked.</p>
+          <p className="small">{done}</p>
+        </div>
+      )}
+
       <ErrorNotice failure={failure ?? networkFailure} />
 
       {action && (
@@ -745,12 +813,16 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                 block
                 disabled={busy}
                 onClick={() =>
-                  run("leave", {
-                    address: USDC_ADDRESS,
-                    abi: ERC20_ABI,
-                    functionName: "approve",
-                    args: [rota, 0n],
-                  })
+                  run(
+                    "leave",
+                    "Done. Rota can no longer move your money for this circle.",
+                    {
+                      address: USDC_ADDRESS,
+                      abi: ERC20_ABI,
+                      functionName: "approve",
+                      args: [rota, 0n],
+                    },
+                  )
                 }
               >
                 {pending === "leave"
@@ -774,12 +846,16 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
                 block
                 disabled={busy}
                 onClick={() =>
-                  run("leave", {
-                    address: USDC_ADDRESS,
-                    abi: ERC20_ABI,
-                    functionName: "approve",
-                    args: [rota, 0n],
-                  })
+                  run(
+                    "leave",
+                    "Done. Rota can no longer move your money for this circle.",
+                    {
+                      address: USDC_ADDRESS,
+                      abi: ERC20_ABI,
+                      functionName: "approve",
+                      args: [rota, 0n],
+                    },
+                  )
                 }
               >
                 {pending === "leave"

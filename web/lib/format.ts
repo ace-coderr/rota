@@ -97,6 +97,10 @@ export function everyInWords(seconds: bigint | undefined): string {
   // 30 days is what the setup form calls "every month", so say it that way
   // rather than making someone translate 2,592,000 seconds back into a month.
   if (s % 2592000 === 0) return plural(s / 2592000, "month");
+  // The setup form offers this one as "every fortnight", so it says that back
+  // rather than "every 2 weeks" — the same period under a different name in
+  // the two places you meet it reads as two different schedules.
+  if (s === 1209600) return "every fortnight";
   if (s % 604800 === 0) return plural(s / 604800, "week");
   if (s % 86400 === 0) return plural(s / 86400, "day");
   if (s % 3600 === 0) return plural(s / 3600, "hour");

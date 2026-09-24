@@ -31,14 +31,50 @@ import { ConfigNotice } from "@/components/ConfigNotice";
 import { useRotaWallet } from "@/lib/wallet/useRotaWallet";
 import { useUsdcDecimals } from "@/lib/useRota";
 import { feeBuffer } from "@/lib/money";
-import { everyInWords } from "@/lib/format";
+import { everyInWords, whenInWords } from "@/lib/format";
 import { inviteLink } from "@/lib/people";
 
+/*
+ * How often money changes hands.
+ *
+ * `short` marks the two periods that exist so a circle can be seen working
+ * inside one sitting — a demonstration, a test on testnet, or a group that
+ * genuinely settles daily. They are real options, not a debug mode: the
+ * contract takes any period in seconds and treats them all the same.
+ */
 const FREQUENCIES = [
-  { label: "Every week", seconds: "604800" },
-  { label: "Every two weeks", seconds: "1209600" },
-  { label: "Every month", seconds: "2592000" },
+  { label: "Every hour", seconds: "3600", short: true },
+  { label: "Every day", seconds: "86400", short: true },
+  { label: "Every week", seconds: "604800", short: false },
+  { label: "Every fortnight", seconds: "1209600", short: false },
+  { label: "Every month", seconds: "2592000", short: false },
 ];
+
+const DEFAULT_PERIOD = "604800";
+
+/**
+ * Below about a pound a round, a circle is being shown rather than saved into,
+ * and nobody demonstrating one wants to wait a week for the second payout —
+ * so the short periods come first. Above it they go to the bottom, where they
+ * cannot be picked for a real circle by accident.
+ *
+ * Only the order changes. The full list is always there, and the choice is
+ * held as a value rather than an index, so reordering can never quietly move
+ * someone onto a different schedule than the one they picked.
+ */
+const SHORT_PERIOD_CEILING = 1;
+
+function orderedFrequencies(amount: string) {
+  const value = Number(amount.trim());
+  const small =
+    Number.isFinite(value) && value > 0 && value < SHORT_PERIOD_CEILING;
+  return small
+    ? FREQUENCIES
+    : [
+        ...FREQUENCIES.filter((f) => !f.short),
+        ...FREQUENCIES.filter((f) => f.short),
+      ];
+}
 
 /*
  * The clock, read once when this module loads in the browser.
@@ -53,6 +89,19 @@ const subscribeNever = () => () => {};
 
 const onDay = (at: Date) =>
   at.toLocaleDateString(undefined, { day: "numeric", month: "long" });
+
+/**
+ * A date is the wrong unit for an hourly circle.
+ *
+ * "First payout 24 September, then every hour until 24 September" is both
+ * true and useless — every payout in the whole circle falls on the same day.
+ * Below a day the schedule switches to the clock, which is what `whenInWords`
+ * already says everywhere else in the app ("today at 4pm").
+ */
+const whenFor = (at: Date, periodSeconds: number) =>
+  periodSeconds < 86400
+    ? whenInWords(BigInt(Math.floor(at.getTime() / 1000)))
+    : onDay(at);
 
 const ordinal = (n: number) => {
   const rest = n % 100;
@@ -71,7 +120,7 @@ export default function CreatePage() {
   const { data: gasPrice } = useGasPrice({ chainId: deployment?.chain.id });
 
   const [amount, setAmount] = useState("");
-  const [period, setPeriod] = useState(FREQUENCIES[0].seconds);
+  const [period, setPeriod] = useState(DEFAULT_PERIOD);
   const [rows, setRows] = useState<Row[]>(() => [newRow(), newRow()]);
 
   const now = useSyncExternalStore(
@@ -345,7 +394,7 @@ export default function CreatePage() {
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
           >
-            {FREQUENCIES.map((f) => (
+            {orderedFrequencies(amount).map((f) => (
               <option key={f.seconds} value={f.seconds}>
                 {f.label}
               </option>
@@ -354,12 +403,12 @@ export default function CreatePage() {
 
           {firstPayout && (
             <p className="step-live">
-              First payout <strong>{onDay(firstPayout)}</strong>, then{" "}
+              First payout <strong>{whenFor(firstPayout, periodSeconds)}</strong>, then{" "}
               {everyInWords(BigInt(period))}
               {lastPayout ? (
                 <>
                   {" "}
-                  until <strong>{onDay(lastPayout)}</strong>.
+                  until <strong>{whenFor(lastPayout, periodSeconds)}</strong>.
                 </>
               ) : (
                 "."
@@ -463,8 +512,11 @@ export default function CreatePage() {
 
             {firstPayout && enoughPeople && (
               <p className="recap-note">
-                First payout {onDay(firstPayout)}
-                {lastPayout ? `, last ${onDay(lastPayout)}` : ""}.
+                First payout {whenFor(firstPayout, periodSeconds)}
+                {lastPayout
+                  ? `, last ${whenFor(lastPayout, periodSeconds)}`
+                  : ""}
+                .
               </p>
             )}
 

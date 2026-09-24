@@ -5,10 +5,40 @@ import { useReadContracts } from "wagmi";
 
 import { Button } from "@/components/Button";
 import { CircleRing } from "@/components/CircleRing";
-import { CountUp, Reveal } from "@/components/Reveal";
+import { CountUp, Reveal, Stagger } from "@/components/Reveal";
 import { DEFAULT_DEPLOYMENT, mainnetDeployment } from "@/lib/deployments";
 import { addressUrl } from "@/lib/explorer";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
+
+/*
+ * The two marks in the compare panel, drawn rather than typed.
+ *
+ * They were the glyphs the reader's font happened to have, and a glyph cannot
+ * be drawn on. As paths they carry the same hairline weight as every rule on
+ * the page, and they draw themselves in when the panel arrives. `pathLength`
+ * normalises each path to 1, so one dash rule covers both without anything
+ * having to measure them.
+ */
+function CrossMark() {
+  return (
+    <svg className="mark-glyph" viewBox="0 0 16 16" aria-hidden="true">
+      <path className="mark-draw" d="M3.5 3.5 L12.5 12.5" pathLength={1} />
+      <path
+        className="mark-draw mark-draw-late"
+        d="M12.5 3.5 L3.5 12.5"
+        pathLength={1}
+      />
+    </svg>
+  );
+}
+
+function TickMark() {
+  return (
+    <svg className="mark-glyph" viewBox="0 0 16 16" aria-hidden="true">
+      <path className="mark-draw" d="M3 8.5 L6.5 12 L13 4" pathLength={1} />
+    </svg>
+  );
+}
 
 /**
  * The editorial volume: the argument for trusting Rota, made with type,
@@ -59,10 +89,14 @@ export default function Home() {
             <span className="label label-rule">
               Rota / Savings circles on Arc
             </span>
+            {/* One word cut out of the page rather than set on it. The
+                outline sits behind an @supports test: a browser without
+                text-stroke would paint transparent text on near-black, which
+                is a missing word rather than a plainer one. */}
             <h1 className="display">
               Save
               <br />
-              together,
+              <span className="display-outline">together,</span>
               <br />
               <em>take turns.</em>
             </h1>
@@ -117,7 +151,7 @@ export default function Home() {
             </div>
           </Reveal>
 
-          <div className="card-grid">
+          <Stagger className="card-grid">
             {[
               {
                 n: "01",
@@ -134,16 +168,16 @@ export default function Home() {
                 title: "Take turns",
                 body: "Each round, everyone's share goes straight to whoever's turn it is. Wallet to wallet, in one go.",
               },
-            ].map((step, index) => (
-              <Reveal key={step.n} delay={index * 80}>
-                <article className="numbered">
-                  <span className="numbered-n">{step.n}</span>
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                </article>
-              </Reveal>
+            ].map((step) => (
+              <article className="numbered" key={step.n}>
+                <span className="numbered-n">
+                  <span className="numbered-slide">{step.n}</span>
+                </span>
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </article>
             ))}
-          </div>
+          </Stagger>
         </div>
       </section>
 
@@ -163,15 +197,21 @@ export default function Home() {
                 <h3>Every other savings circle: someone holds the money</h3>
                 <ul className="marks">
                   <li>
-                    <span className="mark mark-no">✕</span>
+                    <span className="mark mark-no">
+                      <CrossMark />
+                    </span>
                     <span>One person collects everyone&rsquo;s share first</span>
                   </li>
                   <li>
-                    <span className="mark mark-no">✕</span>
+                    <span className="mark mark-no">
+                      <CrossMark />
+                    </span>
                     <span>You have to trust them not to disappear with it</span>
                   </li>
                   <li>
-                    <span className="mark mark-no">✕</span>
+                    <span className="mark mark-no">
+                      <CrossMark />
+                    </span>
                     <span>
                       If they do, there is nothing you can check and nothing to
                       recover
@@ -184,19 +224,25 @@ export default function Home() {
                 <h3>Rota: nothing is ever pooled</h3>
                 <ul className="marks">
                   <li>
-                    <span className="mark mark-yes">✓</span>
+                    <span className="mark mark-yes">
+                      <TickMark />
+                    </span>
                     <span>
                       Each share moves straight from one wallet to another
                     </span>
                   </li>
                   <li>
-                    <span className="mark mark-yes">✓</span>
+                    <span className="mark mark-yes">
+                      <TickMark />
+                    </span>
                     <span>
                       Rota can&rsquo;t hold your money and can&rsquo;t take it
                     </span>
                   </li>
                   <li>
-                    <span className="mark mark-yes">✓</span>
+                    <span className="mark mark-yes">
+                      <TickMark />
+                    </span>
                     <span>
                       You can withdraw your permission at any time, from the app
                     </span>
