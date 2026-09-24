@@ -43,7 +43,16 @@ export function WalletControl({
   const [copied, setCopied] = useState(false);
   const root = useRef<HTMLDivElement | null>(null);
 
-  const signedIn = isConnected || circle.status === "ready";
+  /*
+   * A Circle session without a wallet is not signed in as far as this control
+   * is concerned. It used to render the chip with the label "Signed in" and a
+   * Copy address item that copied nothing, because status said ready while
+   * the address was still undefined.
+   */
+  const circleHasWallet = circle.status === "ready" && Boolean(circle.address);
+  const circleSettingUp =
+    circle.status === "creating-wallet" || circle.status === "no-wallet";
+  const signedIn = isConnected || circleHasWallet;
   const shown = (isConnected ? address : circle.address) ?? undefined;
   const active = deploymentFor(chainId);
   const wrongNetwork = signedIn && isConnected && active === undefined;
@@ -73,6 +82,23 @@ export function WalletControl({
   }, [copied]);
 
   if (!signedIn) {
+    // Mid-setup is its own thing: say so rather than offering Connect to
+    // someone who has already signed in and is waiting on a wallet.
+    if (circleSettingUp) {
+      return (
+        <Button
+          size="sm"
+          variant="secondary"
+          aria-expanded={connectOpen}
+          onClick={onConnectClick}
+        >
+          {circle.status === "creating-wallet"
+            ? "Setting up your wallet…"
+            : "No wallet yet"}
+        </Button>
+      );
+    }
+
     return (
       <Button size="sm" aria-expanded={connectOpen} onClick={onConnectClick}>
         {connectOpen ? "Close" : "Connect"}
@@ -104,7 +130,7 @@ export function WalletControl({
         )}
         <span className="wallet-rule" aria-hidden="true" />
         <span className="wallet-addr">
-          {copied ? "Copied" : shown ? shortAddress(shown) : "Signed in"}
+          {copied ? "Copied" : shortAddress(shown!)}
         </span>
       </button>
 

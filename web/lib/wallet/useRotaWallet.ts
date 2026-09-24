@@ -29,7 +29,17 @@ export function useRotaWallet() {
   const { writeContractAsync } = useWriteContract();
   const circle = useCircleWallet();
 
-  const circleReady = circleConfigured && circle.status === "ready";
+  /*
+   * An address, not just a status. A Circle sign-in yields a user token
+   * immediately but the wallet is a separate object that may not exist yet,
+   * so `status === "ready"` alone once meant "signed in, addressless" —
+   * isReady said true, address was undefined, and every consumer downstream
+   * believed there was a wallet. /create's "your own address isn't in the
+   * list" check reads `you === undefined || …`, so it passed vacuously and
+   * would have let someone create a circle they were not in.
+   */
+  const circleReady =
+    circleConfigured && circle.status === "ready" && Boolean(circle.address);
   const kind: WalletKind = isConnected
     ? "injected"
     : circleReady
@@ -72,7 +82,8 @@ export function useRotaWallet() {
     kind,
     address,
     chainId: kind === "circle" ? undefined : chainId,
-    isReady: kind !== "none",
+    // Never true without an address: everything downstream assumes one.
+    isReady: kind !== "none" && Boolean(address),
     send,
   };
 }

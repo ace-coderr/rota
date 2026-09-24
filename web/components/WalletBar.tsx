@@ -68,7 +68,8 @@ export function WalletBar({
 
   // ------------------------------------------------------------ signed in
 
-  if (isConnected || circle.status === "ready") {
+  // An address, not a status: see WalletControl for why these differ.
+  if (isConnected || (circle.status === "ready" && circle.address)) {
     const shown = isConnected ? address : circle.address;
     return (
       <>
@@ -138,6 +139,16 @@ export function WalletBar({
       <p style={{ marginBottom: "1rem" }}>
         {reason ?? "Sign in to see your circle."}
       </p>
+
+      {circle.status === "no-wallet" && (
+        <div className="notice notice-wait" role="status">
+          <p className="notice-title">Your wallet is still being set up.</p>
+          <p className="small">
+            {circle.message ??
+              "You are signed in, but there is no wallet on this network yet."}
+          </p>
+        </div>
+      )}
 
       {circle.status === "creating-wallet" && (
         <p className="small muted">Setting up your wallet…</p>

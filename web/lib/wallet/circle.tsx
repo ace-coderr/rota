@@ -52,6 +52,8 @@ export type CircleStatus =
   | "awaiting-otp"
   | "signing-in"
   | "creating-wallet"
+  /** Signed in, but there is no usable wallet on this chain. */
+  | "no-wallet"
   | "ready"
   | "error";
 
@@ -103,12 +105,30 @@ const store = {
   },
 };
 
-const chainCode = (chainId: number) =>
+export const chainCode = (chainId: number) =>
   chainId === ARC_MAINNET_CHAIN_ID
     ? "ARC"
     : chainId === ARC_TESTNET_CHAIN_ID
       ? "ARC-TESTNET"
       : undefined;
+
+/**
+ * The wallet for a chain, or none.
+ *
+ * Exported and pure so the rule can be tested: there is no `?? wallets[0]`
+ * fallback, because a user with only an Arc testnet wallet, signed in on
+ * mainnet, would otherwise get the testnet wallet — a real address, attached
+ * to the wrong chain, which every consumer would then trust. A wallet with no
+ * address yet is Circle still creating it, and does not count either.
+ */
+export function selectWallet(
+  wallets: CircleWallet[],
+  chainId: number,
+): CircleWallet | undefined {
+  const code = chainCode(chainId);
+  if (!code) return undefined;
+  return wallets.find((w) => w.blockchain === code && Boolean(w.address));
+}
 
 /**
  * A failure the server has already classified. The raw Circle error stays on
@@ -195,11 +215,22 @@ export function CircleWalletProvider({
     return data.wallets ?? [];
   }, []);
 
-  /** Creates the wallet if the user has none, then loads it. */
+  /**
+   * Creates a wallet on this chain if the user has none, then loads it.
+   *
+   * A Circle sign-in gives a user token; the wallet is a separate object that
+   * may not exist yet, may exist only on another chain, or may still be
+   * initialising. "Signed in" is therefore not the same as "has an address",
+   * and this function is only allowed to report ready once an address for
+   * THIS chain actually came back.
+   */
   const ensureWallet = useCallback(
     async (userToken: string, encryptionKey: string) => {
+      const onThisChain = (list: CircleWallet[]) =>
+        selectWallet(list, chainId) !== undefined;
+
       const existing = await loadWallets(userToken);
-      if (existing.length > 0) {
+      if (onThisChain(existing)) {
         setStatus("ready");
         return;
       }
@@ -210,28 +241,44 @@ export function CircleWalletProvider({
         { userToken, chainId },
       );
 
-      if (!init.challengeId) {
-        await loadWallets(userToken);
-        setStatus("ready");
-        return;
+      if (init.challengeId) {
+        const sdk = sdkRef.current;
+        if (!sdk) throw new Error("Wallet SDK is not ready");
+
+        sdk.setAuthentication({ userToken, encryptionKey });
+        await new Promise<void>((resolve, reject) => {
+          sdk.execute(init.challengeId!, (error) => {
+            if (error) {
+              reject(new Error("Wallet setup was not completed"));
+              return;
+            }
+            resolve();
+          });
+        });
       }
 
-      const sdk = sdkRef.current;
-      if (!sdk) throw new Error("Wallet SDK is not ready");
+      /*
+       * Circle creates the wallet asynchronously, so the list can still be
+       * empty immediately after the challenge completes. Poll briefly rather
+       * than declaring success on a list nobody checked — which is exactly
+       * how the chip ended up reading "Signed in" with nothing to copy.
+       */
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const list = await loadWallets(userToken);
+        if (onThisChain(list)) {
+          setStatus("ready");
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+      }
 
-      sdk.setAuthentication({ userToken, encryptionKey });
-      await new Promise<void>((resolve, reject) => {
-        sdk.execute(init.challengeId!, (error) => {
-          if (error) {
-            reject(new Error("Wallet setup was not completed"));
-            return;
-          }
-          resolve();
-        });
-      });
-
-      await loadWallets(userToken);
-      setStatus("ready");
+      setStatus("no-wallet");
+      setMessage(
+        "You are signed in, but there is no wallet on this network yet. " +
+          "Circle may still be setting it up — wait a moment and reload. If it " +
+          "keeps saying this, the site's Circle project may not have this " +
+          "network enabled.",
+      );
     },
     [chainId, loadWallets],
   );
@@ -441,10 +488,20 @@ export function CircleWalletProvider({
     setStatus("signed-out");
   }, []);
 
-  const wallet = useMemo(() => {
-    const code = chainCode(chainId);
-    return wallets.find((w) => w.blockchain === code) ?? wallets[0];
-  }, [wallets, chainId]);
+  /**
+   * The wallet for THIS chain, or none.
+   *
+   * There used to be a `?? wallets[0]` fallback here. A user with only an
+   * Arc testnet wallet, signed in on mainnet, would silently get the testnet
+   * wallet: the app would show a real address and then build mainnet
+   * transactions against a wallet that lives on another chain. Being
+   * addressless is a state the UI can explain; being on the wrong chain is
+   * not.
+   */
+  const wallet = useMemo(
+    () => selectWallet(wallets, chainId),
+    [wallets, chainId],
+  );
 
   /**
    * Runs an encoded call. The server only creates a challenge — the person
@@ -455,16 +512,29 @@ export function CircleWalletProvider({
       const sdk = sdkRef.current;
       const { userToken, encryptionKey } = session;
 
-      if (!sdk || !userToken || !encryptionKey || !wallet) {
-        throw new Error("Your wallet is not ready yet.");
-      }
       if (!chainCode(forChainId)) {
         throw new Error("This network is not supported.");
       }
 
+      /*
+       * Selected for the chain this call targets, not the ambient one. Circle
+       * takes a walletId and infers the chain from it, so sending with a
+       * wallet that lives on another chain is a silent wrong-network send
+       * rather than a rejection.
+       */
+      const sending = selectWallet(wallets, forChainId);
+
+      if (!sdk || !userToken || !encryptionKey || !sending) {
+        throw new Error(
+          sending
+            ? "Your wallet is not ready yet."
+            : "You do not have a wallet on this network yet.",
+        );
+      }
+
       const { challengeId } = await post<{ challengeId: string }>(
         "/api/circle/execute",
-        { userToken, walletId: wallet.id, contractAddress: to, callData: data },
+        { userToken, walletId: sending.id, contractAddress: to, callData: data },
       );
 
       sdk.setAuthentication({ userToken, encryptionKey });
@@ -494,7 +564,7 @@ export function CircleWalletProvider({
         }
       }
     },
-    [session, wallet],
+    [session, wallets],
   );
 
   const value = useMemo<CircleContextValue>(

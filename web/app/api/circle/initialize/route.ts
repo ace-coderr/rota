@@ -31,12 +31,24 @@ export async function POST(request: Request) {
       accountType: "EOA",
     });
 
+    console.info(
+      "[circle] initialize",
+      JSON.stringify({
+        chainId,
+        blockchain: circleBlockchain(chainId),
+        gotChallenge: Boolean(response.data?.challengeId),
+      }),
+    );
+
     return Response.json({ challengeId: response.data?.challengeId });
   } catch (error) {
     // Already initialised is not a failure: the caller lists wallets instead.
     // Checked before reporting, so it never reaches the log as an error.
     const code = circleCodeOf(error);
-    if (code === 155106) return Response.json({ code, alreadyInitialised: true });
+    if (code === 155106) {
+      console.info("[circle] initialize: already initialised, listing instead");
+      return Response.json({ code, alreadyInitialised: true });
+    }
 
     const failure = circleFailure("initialize", error);
     return Response.json(failure, { status: statusFor(failure.kind) });

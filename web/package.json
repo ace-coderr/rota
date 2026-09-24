@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "icon": "node --experimental-strip-types --no-warnings scripts/gen-icon.ts",
-    "check:errors": "node --experimental-strip-types --no-warnings scripts/check-circle-errors.mjs"
+    "check:errors": "node --experimental-strip-types --no-warnings scripts/check-circle-errors.mjs",
+    "check:wallet": "node --experimental-strip-types --no-warnings scripts/check-wallet-selection.mjs"
   },
   "dependencies": {
     "@circle-fin/user-controlled-wallets": "^10.8.1",

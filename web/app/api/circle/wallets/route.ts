@@ -15,7 +15,24 @@ export async function POST(request: Request) {
       address: wallet.address,
       blockchain: wallet.blockchain,
       accountType: wallet.accountType,
+      state: wallet.state,
     }));
+
+    /*
+     * Logged because an empty list here is indistinguishable from a working
+     * sign-in on the client: the user has a token, so they look signed in,
+     * and the missing address only shows up as a chip reading "Signed in".
+     * Never logs the user token.
+     */
+    console.info(
+      "[circle] wallets",
+      JSON.stringify({
+        count: wallets.length,
+        blockchains: wallets.map((w) => w.blockchain),
+        states: wallets.map((w) => w.state),
+        withAddress: wallets.filter((w) => w.address).length,
+      }),
+    );
 
     return Response.json({ wallets });
   } catch (error) {

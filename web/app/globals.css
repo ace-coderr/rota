@@ -15,6 +15,32 @@
  * The palette is shared so the two never look like different products.
  */
 
+/*
+ * ONE CONVENTION, and it is not optional.
+ *
+ * If a rule is element-qualified, every override of it must be
+ * element-qualified too. `main.sheet` is (0,1,1); a later `.sheet-wide` is
+ * (0,1,0) and loses, however far down the file it sits. Source order only
+ * breaks ties — it does not beat specificity.
+ *
+ * This has cost real time three times:
+ *
+ *   1. The hero buttons rendered 68px and 56px. `.hero-actions .btn-block`
+ *      tied with `.btn-block + .btn-block`, so a 12px margin survived; in a
+ *      row with align-items: stretch that margin does not add space, it makes
+ *      the row taller and stretches the FIRST button to fill it. The symptom
+ *      was nowhere near the cause.
+ *   2. The address field on /create collapsed, then rendered the same width as
+ *      the optional name box. `.row-fields input` (0,1,1) outranked
+ *      `.row-addr` (0,1,0). Fixed as `.row-fields input.row-addr`.
+ *   3. /create stayed 560px wide after being given a 69rem layout, because
+ *      `.sheet-wide` lost to `main.sheet`. It looked like the layout had not
+ *      been applied at all. Fixed as `main.sheet-wide`.
+ *
+ * All three were invisible in the diff and only showed up in a measurement.
+ * When overriding, match the selector shape rather than trusting position.
+ */
+
 :root {
   color-scheme: light;
 
