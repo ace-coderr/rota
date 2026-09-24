@@ -772,7 +772,13 @@
   transition: transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.ring-fan {
+/*
+ * Nothing here animates until .ring-live is on the wrapper, which CircleRing
+ * adds once the main thread goes idle. Everything below is therefore written
+ * so that WITHOUT that class the ring is a correct still picture: the fan at
+ * rest, one seat lit, and the money sitting on the members whose it is.
+ */
+.ring-live .ring-fan {
   transform-box: view-box;
   transform-origin: 50% 50%;
   animation: turn 48s cubic-bezier(0.65, 0, 0.35, 1) infinite;
@@ -818,8 +824,7 @@
   }
 }
 
-.token {
-  opacity: 0;
+.ring-live .token {
   animation: travel 6s cubic-bezier(0.5, 0, 0.25, 1) infinite;
 }
 
@@ -845,30 +850,13 @@
   }
 }
 
-/* The spoke brightens under the money crossing it, and settles back. */
-.spoke {
-  stroke-opacity: 0.1;
-  animation: spoke 6s ease-in-out infinite;
-}
-
-@keyframes spoke {
-  0%,
-  4% {
-    stroke-opacity: 0.1;
-  }
-  32% {
-    stroke-opacity: 0.26;
-  }
-  56%,
-  100% {
-    stroke-opacity: 0.1;
-  }
-}
-
 /* Arrival, as weight rather than glow: the seat takes the money and settles. */
 .seat-live {
   transform-box: fill-box;
   transform-origin: center;
+}
+
+.ring-live .seat-live {
   animation: seat-land 6s cubic-bezier(0.34, 1.4, 0.64, 1) infinite;
 }
 
@@ -895,10 +883,13 @@
   transform-box: fill-box;
   transform-origin: center;
   opacity: 0;
+}
+
+.ring-live .ripple {
   animation: ripple 6s cubic-bezier(0.2, 0.8, 0.3, 1) infinite;
 }
 
-.ripple-late {
+.ring-live .ripple-late {
   animation-delay: 380ms;
 }
 
@@ -992,9 +983,8 @@
  *
  * Reveal and Stagger already stand down on their own — they never arm, so
  * nothing they touch is ever hidden — which leaves the animations that run
- * without them. The ring keeps its drawing and loses its motion: the tokens
- * stay put on the members they belong to, which is still a true picture of
- * the thing, and the highlight stays on one seat.
+ * without them. The ring falls back to the still picture it is built around:
+ * the money sitting on the members it belongs to, one seat lit.
  */
 @media (prefers-reduced-motion: reduce) {
   .numbered,
@@ -1007,21 +997,12 @@
   }
 
   .ring-lean,
-  .ring-fan,
-  .token,
-  .spoke,
-  .seat-live,
-  .ripple {
+  .ring-live .ring-fan,
+  .ring-live .token,
+  .ring-live .seat-live,
+  .ring-live .ripple {
     animation: none;
     transition: none;
-  }
-
-  .token {
-    opacity: 1;
-  }
-
-  .spoke {
-    stroke-opacity: 0.16;
   }
 
   [data-shown] .numbered-slide,
