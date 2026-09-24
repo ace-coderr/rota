@@ -1,8 +1,7 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { isAddress } from "viem";
-
-import { Button } from "@/components/Button";
 
 export type Row = { id: string; address: string; name: string };
 
@@ -35,12 +34,18 @@ export function rowProblem(
 }
 
 /**
- * One row per member, rather than a textarea people have to guess the format
- * of. The order of the rows is the order people are paid, which is why they
- * can be moved rather than only added and removed.
+ * One row per person, rather than a textarea people have to guess the format
+ * of. The order of the rows is the order they are paid, which is why they can
+ * be moved rather than only added and removed.
+ *
+ * Each row is built to read as somebody: a position in the rotation, then
+ * their address, then their name with an initial that appears as it is
+ * typed. The reorder and remove controls stay out of the way until the row is
+ * hovered or holds focus — three permanently greyed buttons on every row is
+ * a wall of disabled-looking furniture around the two fields that matter.
  *
  * Pasting several lines into any address field still works, because that is
- * how anyone with a list already will try to use this.
+ * how anyone who already has a list will try to use this.
  */
 export function MemberRows({
   rows,
@@ -51,6 +56,19 @@ export function MemberRows({
   setRows: (next: Row[]) => void;
   you: string | undefined;
 }) {
+  /** The row added by the last press of "Add person", if any. */
+  const [entered, setEntered] = useState<string | undefined>();
+  const enteredField = useRef<HTMLInputElement | null>(null);
+
+  /*
+   * A row someone asked for should be a row they can type in. Without this
+   * the cursor stays on the Add button, which on a phone means the keyboard
+   * closes and the new field has to be found and tapped.
+   */
+  useEffect(() => {
+    if (entered) enteredField.current?.focus();
+  }, [entered]);
+
   const update = (index: number, patch: Partial<Row>) =>
     setRows(rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
 
@@ -60,6 +78,12 @@ export function MemberRows({
     const next = [...rows];
     [next[index], next[to]] = [next[to], next[index]];
     setRows(next);
+  };
+
+  const add = () => {
+    const row = newRow();
+    setRows([...rows, row]);
+    setEntered(row.id);
   };
 
   /**
@@ -88,85 +112,118 @@ export function MemberRows({
   };
 
   return (
-    <div className="rows">
-      {rows.map((row, index) => {
-        const problem = rowProblem(rows, index, you);
-        const isYou =
-          you !== undefined &&
-          row.address.trim().toLowerCase() === you.toLowerCase();
-        return (
-          <div className="row" key={row.id}>
-            <span className="row-n" aria-hidden="true">
-              {index + 1}
-            </span>
+    <div className="people">
+      <ol className="people-list">
+        {rows.map((row, index) => {
+          const problem = rowProblem(rows, index, you);
+          const isYou =
+            you !== undefined &&
+            row.address.trim().toLowerCase() === you.toLowerCase();
+          const initial = row.name.trim().charAt(0).toUpperCase();
 
-            <div className="row-fields">
-              <input
-                aria-label={`Wallet address for person ${index + 1}`}
-                value={row.address}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder="0x…"
-                className={`row-addr ${problem ? "is-wrong" : ""}`}
-                onPaste={onPaste(index)}
-                onChange={(e) => update(index, { address: e.target.value })}
-              />
-              <input
-                aria-label={`Name for person ${index + 1}, optional`}
-                value={row.name}
-                placeholder="Name (optional)"
-                onChange={(e) => update(index, { name: e.target.value })}
-              />
-            </div>
+          return (
+            <li
+              className={`prow${row.id === entered ? " is-new" : ""}`}
+              key={row.id}
+            >
+              <span className="prow-pos" aria-hidden="true">
+                {index + 1}
+              </span>
 
-            <div className="row-tools">
-              <button
-                type="button"
-                className="row-btn"
-                aria-label={`Move person ${index + 1} earlier`}
-                disabled={index === 0}
-                onClick={() => move(index, -1)}
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                className="row-btn"
-                aria-label={`Move person ${index + 1} later`}
-                disabled={index === rows.length - 1}
-                onClick={() => move(index, 1)}
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                className="row-btn"
-                aria-label={`Remove person ${index + 1}`}
-                disabled={rows.length <= 2}
-                onClick={() => setRows(rows.filter((_, i) => i !== index))}
-              >
-                ×
-              </button>
-            </div>
+              <div className="prow-fields">
+                <input
+                  ref={row.id === entered ? enteredField : undefined}
+                  aria-label={`Wallet address for person ${index + 1}`}
+                  value={row.address}
+                  spellCheck={false}
+                  autoComplete="off"
+                  placeholder="0x…"
+                  className={`prow-addr${problem ? " is-wrong" : ""}`}
+                  aria-invalid={problem ? true : undefined}
+                  onPaste={onPaste(index)}
+                  onChange={(e) => update(index, { address: e.target.value })}
+                />
 
-            {isYou && !problem && <p className="row-note">That’s you.</p>}
-            {problem && (
-              <p className="row-problem" role="alert">
-                {problem}
-              </p>
-            )}
-          </div>
-        );
-      })}
+                <div className="prow-named">
+                  {/*
+                    The slot is always here and always the same width, so the
+                    name field does not jump sideways on the first keystroke.
+                    It only draws itself once there is a letter to show.
+                  */}
+                  <span
+                    className="prow-avatar"
+                    data-filled={initial ? "" : undefined}
+                    aria-hidden="true"
+                  >
+                    {initial}
+                  </span>
+                  <input
+                    aria-label={`Name for person ${index + 1}, optional`}
+                    value={row.name}
+                    className="prow-name"
+                    placeholder="Name (optional)"
+                    onChange={(e) => update(index, { name: e.target.value })}
+                  />
+                </div>
+              </div>
 
-      <Button
-        size="sm"
-        variant="secondary"
+              <div className="prow-tools">
+                <button
+                  type="button"
+                  className="row-btn"
+                  aria-label={`Move person ${index + 1} earlier`}
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="row-btn"
+                  aria-label={`Move person ${index + 1} later`}
+                  disabled={index === rows.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="row-btn"
+                  aria-label={`Remove person ${index + 1}`}
+                  disabled={rows.length <= 2}
+                  onClick={() => setRows(rows.filter((_, i) => i !== index))}
+                >
+                  ×
+                </button>
+              </div>
+
+              {isYou && !problem && <p className="row-note">That’s you.</p>}
+              {problem && (
+                <p className="row-problem" role="alert">
+                  {problem}
+                </p>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+
+      {/*
+        Deliberately outside the button system, like .text-action is. The
+        system's job is to make decisions look identical to each other; this
+        is an opening in the list rather than a decision, and a dashed edge
+        the width of the rows says "another one goes here" without competing
+        with the one filled button on the screen.
+      */}
+      <button
+        type="button"
+        className="add-person"
         disabled={rows.length >= MAX_MEMBERS}
-        onClick={() => setRows([...rows, newRow()])}
+        onClick={add}
       >
-        Add person
-      </Button>
+        <span aria-hidden="true">+</span> Add person
+      </button>
+
       {rows.length >= MAX_MEMBERS && (
         <p className="hint">A circle can have at most {MAX_MEMBERS} people.</p>
       )}

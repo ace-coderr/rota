@@ -4,6 +4,9 @@ import Link from "next/link";
 
 import { Button } from "@/components/Button";
 import { useState, useSyncExternalStore } from "react";
+import { AmountField } from "@/components/AmountField";
+import { Changing } from "@/components/Changing";
+import { PeriodPicker, type Frequency } from "@/components/PeriodPicker";
 import { formatUnits, parseUnits, type Address } from "viem";
 import { useAccount, useGasPrice, usePublicClient } from "wagmi";
 
@@ -37,44 +40,26 @@ import { inviteLink } from "@/lib/people";
 /*
  * How often money changes hands.
  *
- * `short` marks the two periods that exist so a circle can be seen working
- * inside one sitting — a demonstration, a test on testnet, or a group that
- * genuinely settles daily. They are real options, not a debug mode: the
- * contract takes any period in seconds and treats them all the same.
+ * Shortest first, and FIXED. These used to reorder as the amount was typed,
+ * so that hourly and daily rose to the top of the dropdown for a circle small
+ * enough to be a demonstration. That was the right instinct for a control
+ * that shows one option at a time, and the wrong mechanism: it solved a
+ * discoverability problem by moving things, and it only worked if you
+ * happened to fill the fields in the order it expected.
+ *
+ * As five visible buttons there is nothing to discover, so the order can be
+ * the honest one — ascending, hourly first, never moving under the cursor
+ * someone is about to click with.
  */
-const FREQUENCIES = [
-  { label: "Every hour", seconds: "3600", short: true },
-  { label: "Every day", seconds: "86400", short: true },
-  { label: "Every week", seconds: "604800", short: false },
-  { label: "Every fortnight", seconds: "1209600", short: false },
-  { label: "Every month", seconds: "2592000", short: false },
+const FREQUENCIES: readonly Frequency[] = [
+  { pill: "Hourly", label: "every hour", seconds: "3600" },
+  { pill: "Daily", label: "every day", seconds: "86400" },
+  { pill: "Weekly", label: "every week", seconds: "604800" },
+  { pill: "Fortnightly", label: "every fortnight", seconds: "1209600" },
+  { pill: "Monthly", label: "every month", seconds: "2592000" },
 ];
 
 const DEFAULT_PERIOD = "604800";
-
-/**
- * Below about a pound a round, a circle is being shown rather than saved into,
- * and nobody demonstrating one wants to wait a week for the second payout —
- * so the short periods come first. Above it they go to the bottom, where they
- * cannot be picked for a real circle by accident.
- *
- * Only the order changes. The full list is always there, and the choice is
- * held as a value rather than an index, so reordering can never quietly move
- * someone onto a different schedule than the one they picked.
- */
-const SHORT_PERIOD_CEILING = 1;
-
-function orderedFrequencies(amount: string) {
-  const value = Number(amount.trim());
-  const small =
-    Number.isFinite(value) && value > 0 && value < SHORT_PERIOD_CEILING;
-  return small
-    ? FREQUENCIES
-    : [
-        ...FREQUENCIES.filter((f) => !f.short),
-        ...FREQUENCIES.filter((f) => f.short),
-      ];
-}
 
 /*
  * The clock, read once when this module loads in the browser.
@@ -108,6 +93,61 @@ const ordinal = (n: number) => {
   if (rest >= 11 && rest <= 13) return `${n}th`;
   return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 };
+
+/**
+ * One step: an anchor in the left rail, and the panel it belongs to.
+ *
+ * The marker is out in the rail rather than inside the box because it is a
+ * position in a sequence, not a caption on a panel — three of them in a
+ * column with a thread between reads as a route with an end, which is the
+ * one thing a set of stacked boxes cannot say.
+ *
+ * `active` is only the starting opinion. The panel also comes forward on
+ * :focus-within, so putting the cursor in a finished step brings it back
+ * without this component needing to hear about it.
+ */
+function Step({
+  n,
+  title,
+  done,
+  active,
+  children,
+}: {
+  n: number;
+  title: string;
+  done: boolean;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      className="step"
+      data-done={done ? "" : undefined}
+      data-active={active ? "" : undefined}
+    >
+      <div className="step-rail" aria-hidden="true">
+        <span className="step-num">
+          {done ? (
+            <svg viewBox="0 0 16 16" className="step-tick">
+              <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" />
+            </svg>
+          ) : (
+            `0${n}`
+          )}
+        </span>
+      </div>
+
+      <div className="step-panel">
+        <h2 className="step-title">
+          <span className="step-title-n">0{n}</span>
+          {title}
+          {done && <span className="sr-only"> — done</span>}
+        </h2>
+        {children}
+      </div>
+    </section>
+  );
+}
 
 export default function CreatePage() {
   const { chainId } = useAccount();
@@ -173,6 +213,39 @@ export default function CreatePage() {
   const myTurn = you
     ? members.findIndex((m) => m.toLowerCase() === you.toLowerCase()) + 1
     : 0;
+
+  /*
+   * A step is answered when it holds something usable. The schedule is
+   * answered from the start, because it ships with a real default rather than
+   * an empty control.
+   */
+  const stepAnswered = [amountValid, true, enoughPeople && rowsClean && youAreIn];
+
+  /*
+   * A step is DONE when it and everything before it is answered.
+   *
+   * The distinction matters on first load: the schedule is answered before
+   * anyone touches it, so ticking it independently put a check against 02
+   * while 01 was still blank, which reads as having skipped a step rather
+   * than as not having started. A rail of markers is a claim about progress
+   * through a sequence, so it has to be scored like one.
+   */
+  const stepDone = stepAnswered.map((_, i) =>
+    stepAnswered.slice(0, i + 1).every(Boolean),
+  );
+
+  // The one the page is asking about: the first that is not finished. Focus
+  // overrides this in CSS, so putting the cursor in a settled step brings it
+  // forward without any of this having to know.
+  const activeStep = stepDone.findIndex((done) => !done);
+
+  const formattedPerPerson =
+    perPerson !== undefined && decimals !== undefined
+      ? `${Number(formatUnits(perPerson, decimals)).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} USDC`
+      : undefined;
 
 
   const ROTA_ADDRESS = deployment?.rota;
@@ -344,152 +417,143 @@ export default function CreatePage() {
       */}
       <form onSubmit={onSubmit} className="build">
         <div className="build-steps">
-        {/* ------------------------------------------------ 01 the money */}
-        <section className="step">
-          <span className="step-n">01 — The money</span>
+          {/* --------------------------------------------- 01 the money */}
+          <Step n={1} title="The money" done={stepDone[0]} active={activeStep === 0}>
+            <label htmlFor="amount">How much does each person put in?</label>
 
-          <label htmlFor="amount">How much does each person put in?</label>
-          <div className="input-suffix">
-            <input
-              id="amount"
-              inputMode="decimal"
+            <AmountField
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="50.00"
-              aria-describedby="amount-hint"
+              onChange={setAmount}
+              invalid={amount.trim() !== "" && !amountValid}
             />
-            <span aria-hidden="true">USDC each round</span>
-          </div>
 
-          <p className="hint" id="amount-hint">
-            {amount.trim() !== "" && !amountValid
-              ? "Enter an amount like 50 or 50.00."
-              : "In USDC, every round."}
-          </p>
-
-          {perPerson !== undefined && decimals !== undefined && (
-            <p className="step-live">
-              Each person needs about{" "}
-              <strong>
-                {Number(formatUnits(perPerson, decimals)).toLocaleString(
-                  undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                )}{" "}
-                USDC
-              </strong>{" "}
-              in their wallet to finish the circle — {members.length - 1}{" "}
-              {members.length - 1 === 1 ? "round" : "rounds"} of {amount.trim()},
-              plus the network charge.
+            <p className="hint" id="amount-hint">
+              {amount.trim() !== "" && !amountValid
+                ? "Enter an amount like 50 or 50.00."
+                : "Everyone puts in the same amount, every round."}
             </p>
-          )}
-        </section>
 
-        {/* --------------------------------------------- 02 the schedule */}
-        <section className="step">
-          <span className="step-n">02 — The schedule</span>
-
-          <label htmlFor="period">How often?</label>
-          <select
-            id="period"
-            value={period}
-            onChange={(e) => setPeriod(e.target.value)}
-          >
-            {orderedFrequencies(amount).map((f) => (
-              <option key={f.seconds} value={f.seconds}>
-                {f.label}
-              </option>
-            ))}
-          </select>
-
-          {firstPayout && (
-            <p className="step-live">
-              First payout <strong>{whenFor(firstPayout, periodSeconds)}</strong>, then{" "}
-              {everyInWords(BigInt(period))}
-              {lastPayout ? (
-                <>
-                  {" "}
-                  until <strong>{whenFor(lastPayout, periodSeconds)}</strong>.
-                </>
-              ) : (
-                "."
+            {/*
+              The consequence of the number above, in the same block of the
+              page rather than in a sentence further down. This is the figure
+              that decides whether someone can afford to be in the circle at
+              all, and it is not the one they typed.
+            */}
+            <div className="needline" aria-live="polite">
+              <span className="needline-key">Each person needs</span>
+              <span className="needline-value">
+                {formattedPerPerson ? (
+                  <Changing value={formattedPerPerson}>
+                    {formattedPerPerson}
+                  </Changing>
+                ) : (
+                  <span className="is-unset">
+                    {amountValid ? "Add people first" : "Set an amount"}
+                  </span>
+                )}
+              </span>
+              {formattedPerPerson && (
+                <span className="needline-why">
+                  {members.length - 1}{" "}
+                  {members.length - 1 === 1 ? "round" : "rounds"} of{" "}
+                  {amount.trim()}, plus the network charge
+                </span>
               )}
-            </p>
-          )}
-        </section>
-
-        {/* ------------------------------------------------ 03 who's in */}
-        <section className="step">
-          <span className="step-n">03 — Who’s in</span>
-          <p className="hint" style={{ margin: "0 0 1rem" }}>
-            In the order they’ll be paid. You can paste a whole list into any
-            address box.
-          </p>
-
-          <MemberRows rows={rows} setRows={setRows} you={you} />
-
-          {members.length > 0 && (
-            <div className="order">
-              <span className="order-label">Payout order</span>
-              <ol>
-                {entries.map((entry, i) => (
-                  <li key={`${entry.address}-${i}`}>
-                    {entry.name ||
-                      (you && entry.address.toLowerCase() === you.toLowerCase()
-                        ? "You"
-                        : `${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`)}
-                  </li>
-                ))}
-              </ol>
             </div>
-          )}
+          </Step>
 
-          {!enoughPeople && members.length > 0 && (
-            <p className="row-problem" role="alert">
-              A circle needs at least two people.
-            </p>
-          )}
-          {!youAreIn && members.length > 0 && (
-            <p className="row-problem" role="alert">
-              Your own address isn’t in the list. You have to be in the circle
-              to start it.
-            </p>
-          )}
-        </section>
+          {/* ------------------------------------------ 02 the schedule */}
+          <Step n={2} title="The schedule" done={stepDone[1]} active={activeStep === 1}>
+            <span className="field-label" id="period-label">
+              How often?
+            </span>
+            <div role="group" aria-labelledby="period-label">
+              <PeriodPicker
+                options={FREQUENCIES}
+                value={period}
+                onChange={setPeriod}
+              />
+            </div>
 
+            {firstPayout && (
+              <p className="step-live" aria-live="polite">
+                First payout{" "}
+                <strong>{whenFor(firstPayout, periodSeconds)}</strong>, then{" "}
+                {everyInWords(BigInt(period))}
+                {lastPayout ? (
+                  <>
+                    {" "}
+                    until <strong>{whenFor(lastPayout, periodSeconds)}</strong>.
+                  </>
+                ) : (
+                  "."
+                )}
+              </p>
+            )}
+          </Step>
+
+          {/* --------------------------------------------- 03 who's in */}
+          <Step n={3} title="Who’s in" done={stepDone[2]} active={activeStep === 2}>
+            <p className="hint" style={{ margin: "0 0 1rem" }}>
+              In the order they’ll be paid. You can paste a whole list into any
+              address box.
+            </p>
+
+            <MemberRows rows={rows} setRows={setRows} you={you} />
+
+            {!enoughPeople && members.length > 0 && (
+              <p className="row-problem" role="alert">
+                A circle needs at least two people.
+              </p>
+            )}
+            {!youAreIn && members.length > 0 && (
+              <p className="row-problem" role="alert">
+                Your own address isn’t in the list. You have to be in the circle
+                to start it.
+              </p>
+            )}
+          </Step>
         </div>
 
         <aside className="build-side">
           <div className="recap">
-            <span className="step-n">Your circle</span>
+            <span className="recap-head">Your circle</span>
 
             <dl className="recap-rows">
               <div>
                 <dt>Each person puts in</dt>
-                <dd>{amountValid ? `${amount.trim()} USDC` : "—"}</dd>
+                <dd>
+                  {amountValid ? (
+                    <Changing value={amount.trim()}>
+                      {amount.trim()} USDC
+                    </Changing>
+                  ) : (
+                    <span className="is-unset">Not set yet</span>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>How often</dt>
-                <dd>{everyInWords(BigInt(period))}</dd>
+                <dd>
+                  <Changing value={period}>{everyInWords(BigInt(period))}</Changing>
+                </dd>
               </div>
               <div>
                 <dt>People</dt>
-                <dd>{members.length || "—"}</dd>
-              </div>
-              <div>
-                <dt>Each person needs</dt>
                 <dd>
-                  {perPerson !== undefined && decimals !== undefined
-                    ? `${Number(formatUnits(perPerson, decimals)).toLocaleString(
-                        undefined,
-                        { minimumFractionDigits: 2, maximumFractionDigits: 2 },
-                      )} USDC`
-                    : "—"}
+                  {members.length > 0 ? (
+                    <Changing value={members.length}>{members.length}</Changing>
+                  ) : (
+                    <span className="is-unset">Nobody added yet</span>
+                  )}
                 </dd>
               </div>
               {myTurn > 0 && (
                 <div>
                   <dt>You are paid</dt>
-                  <dd>{ordinal(myTurn)}</dd>
+                  <dd>
+                    <Changing value={myTurn}>{ordinal(myTurn)}</Changing>
+                  </dd>
                 </div>
               )}
             </dl>
@@ -519,6 +583,26 @@ export default function CreatePage() {
                 .
               </p>
             )}
+
+            {/*
+              The line under the rule: what someone has to actually hold. A
+              receipt puts its total below a divider because everything above
+              it is working and this is the answer.
+            */}
+            <div className="recap-total">
+              <dt>Each person needs</dt>
+              <dd>
+                {formattedPerPerson ? (
+                  <Changing value={formattedPerPerson}>
+                    {formattedPerPerson}
+                  </Changing>
+                ) : (
+                  <span className="is-unset">
+                    {amountValid ? "Once you add people" : "Once you set the amount"}
+                  </span>
+                )}
+              </dd>
+            </div>
 
             <div className="recap-action">
               {isConnected ? (

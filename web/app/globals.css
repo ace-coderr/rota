@@ -36,6 +36,9 @@
  *   3. /create stayed 560px wide after being given a 69rem layout, because
  *      `.sheet-wide` lost to `main.sheet`. It looked like the layout had not
  *      been applied at all. Fixed as `main.sheet-wide`.
+ *   4. Every step panel on /create opened with 44px of empty space above its
+ *      heading, because `.sheet h2` (0,1,1) kept its 2.75rem top margin over
+ *      `.step-title` (0,1,0). Fixed as `h2.step-title`.
  *
  * All three were invisible in the diff and only showed up in a measurement.
  * When overriding, match the selector shape rather than trusting position.
@@ -759,6 +762,16 @@ main.sheet-wide {
     0 12px 32px -20px rgba(10, 10, 10, 0.4);
 }
 
+.recap-head {
+  display: block;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+  margin-bottom: 0.875rem;
+}
+
 .recap-rows {
   margin: 0 0 1rem;
 }
@@ -810,6 +823,35 @@ main.sheet-wide {
   margin: 0 0 1rem;
 }
 
+.recap-total {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--ink);
+}
+
+.recap-total dt {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+}
+
+.recap-total dd {
+  margin: 0;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.375rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .recap-action {
   padding-top: 1rem;
   border-top: 1px solid var(--edge);
@@ -828,187 +870,586 @@ main.sheet-wide {
 /* -------------------------------------------------------------- steps */
 
 /*
- * /create is three decisions, not four fields. Each one gets its own bordered
- * panel with a number, so the page reads as a sequence with an end rather
- * than a stack you scroll until it stops.
+ * /create is three decisions, and it should read as three.
+ *
+ * The markers live in a rail beside the panels rather than as labels inside
+ * them, with a thread running between: a column of anchors with an end is
+ * the one thing a stack of identical boxes cannot say on its own. The panel
+ * a step is asking about comes forward; the ones behind it settle back.
  */
 .step {
-  border: 1px solid var(--edge);
-  background: var(--white);
-  padding: 1.25rem;
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr);
+  gap: 0 0.75rem;
   margin-bottom: 1.25rem;
 }
 
-.step-n {
-  display: block;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: var(--on-light-soft);
-  margin-bottom: 0.875rem;
+@media (min-width: 30rem) {
+  .step {
+    grid-template-columns: 3rem minmax(0, 1fr);
+    gap: 0 1.125rem;
+  }
 }
 
-/* A line that answers the question the field just asked. */
-.step-live {
-  font-size: 1rem;
-  line-height: 1.5;
-  margin: 0.875rem 0 0;
-  padding-top: 0.875rem;
-  border-top: 1px solid var(--edge);
+.step-rail {
+  position: relative;
 }
 
-/* An amount and its unit share one box, so the unit cannot be mistaken for
-   part of the value. */
-.input-suffix {
-  display: flex;
-  align-items: stretch;
-  border: 1px solid var(--ink);
-}
-
-.input-suffix input {
-  border: 0;
-  flex: 1;
-  min-width: 0;
-}
-
-.input-suffix input:focus-visible {
-  outline-offset: -2px;
-}
-
-.input-suffix > span {
-  display: flex;
-  align-items: center;
-  padding: 0 1rem;
+/* The thread. Crosses the gap between panels, so the three read as one run. */
+.step:not(:last-child) .step-rail::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 2.75rem;
+  bottom: -1.25rem;
   border-left: 1px solid var(--edge);
-  background: var(--cream);
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.8125rem;
-  letter-spacing: 0.04em;
-  color: var(--on-light-soft);
-  white-space: nowrap;
 }
 
-/* ---------------------------------------------------------- member rows */
-
-.rows {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  align-items: flex-start;
-}
-
-/*
- * On a phone the up/down/remove column costs 104px out of 335, which left an
- * address field 145px wide. The tools drop under the fields instead, so the
- * address gets the whole width.
- */
-.row {
+.step-num {
   display: grid;
-  grid-template-columns: 1.5rem 1fr;
-  gap: 0.5rem 0.625rem;
-  align-items: start;
-  width: 100%;
-}
-
-@media (min-width: 30rem) {
-  .row {
-    grid-template-columns: 1.5rem 1fr auto;
-  }
-}
-
-.row-n {
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  background: var(--cream);
+  color: var(--on-light-soft);
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 0.8125rem;
-  color: var(--on-light-soft);
-  padding-top: 1.1rem;
-}
-
-.row-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 0;
-}
-
-@media (min-width: 30rem) {
-  .row-fields {
-    flex-direction: row;
-  }
-
-  /*
-   * Both fields need an explicit flex, not just the address one. The global
-   * input rule sets width: 100%, which becomes the flex basis for any field
-   * that does not override it — so the name box claimed the whole row and the
-   * address, sitting on a basis of 0, shrank to 34px.
-   */
-  .row-fields input {
-    flex: 1;
-  }
-
-  /* Qualified with the element, or `.row-fields input` above outranks it and
-     the address ends up the same width as the optional name. */
-  .row-fields input.row-addr {
-    flex: 1.6;
-  }
-}
-
-.row-fields input {
-  min-height: 48px;
-  font-size: 1rem;
-  min-width: 0;
-}
-
-.row-addr {
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.875rem;
-}
-
-.row-addr.is-wrong {
-  border-color: var(--warn);
-}
-
-.row-tools {
-  display: flex;
-  gap: 0.25rem;
-  grid-column: 2;
-}
-
-@media (min-width: 30rem) {
-  .row-tools {
-    grid-column: auto;
-  }
-}
-
-.row-btn {
-  width: 32px;
-  height: 48px;
-  border: 1px solid var(--edge);
-  background: transparent;
-  color: var(--ink);
-  border-radius: 0;
-  cursor: pointer;
-  font-size: 0.875rem;
-  line-height: 1;
-}
-
-.row-btn {
+  letter-spacing: 0.06em;
   transition:
     background-color var(--tap) ease,
     border-color var(--tap) ease,
     color var(--tap) ease;
 }
 
-.row-btn:hover:not(:disabled) {
+.step[data-active] .step-num,
+.step:focus-within .step-num {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--white);
+}
+
+/* Done outranks active: a step you have gone back into is still finished. */
+.step[data-done] .step-num,
+.step[data-done]:focus-within .step-num {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--cream);
+}
+
+.step-tick {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
+.step-panel {
+  /*
+   * The member rows lay themselves out against THIS, not the window.
+   *
+   * They were switching to a side-by-side address and name at a 34rem
+   * viewport, which is the wrong measurement: at 1440 the page is two
+   * columns, so a 1440px window gives this panel 556px, and the address
+   * field ended up 231px wide for an address that needs 385px. A 42-
+   * character string you can only see half of is not something anyone can
+   * check, and checking it is the entire reason it is on screen.
+   *
+   * Without container query support the rows stay stacked, which is the
+   * readable arrangement anyway.
+   */
+  container-type: inline-size;
+  border: 1px solid var(--edge);
+  background: var(--white);
+  padding: 1.25rem;
+  transition:
+    border-color var(--tap) ease,
+    box-shadow var(--tap) ease,
+    background-color var(--tap) ease;
+}
+
+@media (min-width: 30rem) {
+  .step-panel {
+    padding: 1.5rem;
+  }
+}
+
+/* Foreground: the one being asked about, or the one holding the cursor. */
+.step[data-active] .step-panel,
+.step:focus-within .step-panel {
+  border-color: var(--ink);
+  box-shadow: 0 12px 30px -24px rgba(10, 10, 10, 0.55);
+}
+
+/* Not started, not current: present, but not competing. */
+.step:not([data-done]):not([data-active]):not(:focus-within) .step-panel {
+  background: transparent;
+}
+
+/* Qualified with the element, or `.sheet h2` above — (0,1,1) — outranks it
+   and puts 2.75rem of its own margin above every step heading. That is the
+   convention at the top of this file, caught for the fourth time. */
+h2.step-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.625rem;
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: 0.01em;
+  margin: 0 0 1.125rem;
+}
+
+/*
+ * The number appears twice on purpose. In the rail it is the anchor; here it
+ * is part of the heading, for the widths where the rail has been squeezed
+ * down to a marker and the heading is doing the labelling.
+ */
+.step-title-n {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+  font-weight: 500;
+}
+
+/* A label for a group of controls, where a <label> would have nothing to
+   point at. Same weight and rhythm as one. */
+.field-label {
+  display: block;
+  font-weight: 700;
+  font-size: 1.0625rem;
+  margin-bottom: 0.5rem;
+}
+
+/* A line that answers the question the field just asked. */
+.step-live {
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 1rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--edge);
+}
+
+/* ------------------------------------------------------ 01, the amount */
+
+/*
+ * The amount is the decision the whole circle rests on, so it is set at the
+ * size of one. The box carries the border and the input carries none, which
+ * is what lets the unit sit INSIDE the field as a suffix — as its own
+ * bordered slab it read as a second control and people clicked it.
+ */
+.amount-box {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  border: 1px solid var(--ink);
+  background: var(--white);
+  padding: 0.5rem 1rem 0.625rem;
+  transition: border-color var(--tap) ease, box-shadow var(--tap) ease;
+}
+
+.amount-box:focus-within {
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+.amount-box.is-wrong {
+  border-color: var(--warn);
+}
+
+/* Qualified with the element: the global input rule is (0,1,1) and a bare
+   class here loses to it, taking the 56px floor and 1.125rem with it. */
+input.amount-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: clamp(2.25rem, 9vw, 3rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+input.amount-input:focus-visible {
+  outline: none;
+}
+
+input.amount-input::placeholder {
+  color: var(--edge);
+}
+
+.amount-unit {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  letter-spacing: 0.12em;
+  color: var(--on-light-soft);
+  white-space: nowrap;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.chip-pick {
+  min-height: 36px;
+  padding: 0 0.875rem;
+  border: 1px solid var(--edge);
+  border-radius: 0;
+  background: transparent;
+  color: var(--on-light);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition:
+    background-color var(--tap) ease,
+    border-color var(--tap) ease,
+    color var(--tap) ease;
+}
+
+.chip-pick:hover {
+  border-color: var(--ink);
   background: var(--btn-wash);
 }
 
-.row-btn:disabled {
-  color: var(--edge);
+.chip-pick[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--cream);
+}
+
+.chip-pick:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* What the amount costs a person over the whole circle, next to the amount
+   itself rather than in a paragraph below it. */
+.needline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-top: 1.125rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--edge);
+}
+
+.needline-key {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+  width: 100%;
+}
+
+.needline-value {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.needline-why {
+  font-size: 0.9375rem;
+  color: var(--on-light-soft);
+}
+
+/* ---------------------------------------------------- 02, the schedule */
+
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.pick-opt {
+  margin: 0;
+  font-weight: 400;
+}
+
+/*
+ * A real radio, moved out of sight rather than display: none — a hidden
+ * input is not focusable and drops out of the group, which is the whole
+ * reason for using radios here instead of buttons.
+ */
+.pick-opt input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.pick-opt span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1rem;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--on-light);
+  font-size: 1rem;
+  cursor: pointer;
+  transition:
+    background-color var(--tap) ease,
+    border-color var(--tap) ease,
+    color var(--tap) ease;
+}
+
+.pick-opt:hover span {
+  border-color: var(--ink);
+  background: var(--btn-wash);
+}
+
+.pick-opt input:checked + span {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: var(--cream);
+}
+
+.pick-opt input:focus-visible + span {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------ 03, the people */
+
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.people-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/*
+ * A row should read as somebody: their place in the rotation, their address,
+ * their name. On a phone the tools drop under the fields, because a 104px
+ * column of buttons out of 335 leaves an address field too narrow to check.
+ */
+.prow {
+  display: grid;
+  grid-template-columns: 1.75rem minmax(0, 1fr);
+  gap: 0.5rem 0.625rem;
+  align-items: start;
+}
+
+/* 44rem, not 34: below that there is not room for a full address AND a
+   usable name box AND the tools on one line, and something gets truncated
+   rather than merely tight. */
+@container (min-width: 44rem) {
+  .prow {
+    grid-template-columns: 1.75rem minmax(0, 1fr) auto;
+  }
+}
+
+/* Their place in the rotation, drawn as a seat rather than set as a digit. */
+.prow-pos {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-top: 0.625rem;
+  border: 1px solid var(--edge);
+  border-radius: 50%;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--on-light-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.prow-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@container (min-width: 44rem) {
+  .prow-fields {
+    flex-direction: row;
+  }
+
+  /* Both need an explicit flex, not just the address. The global input rule
+     sets width: 100%, which becomes the flex basis for whichever field does
+     not override it — that is how the address once ended up 34px wide. */
+  .prow-fields > * {
+    flex: 1;
+  }
+
+  .prow-fields > input.prow-addr {
+    flex: 1.7;
+  }
+}
+
+input.prow-addr,
+input.prow-name {
+  min-height: 48px;
+  font-size: 1rem;
+  min-width: 0;
+}
+
+/* Tighter than the rest of the form on purpose: every character saved is
+   more of the address visible, and this is the one field whose whole value
+   is being able to read all of it. */
+input.prow-addr {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.8125rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+input.prow-addr.is-wrong {
+  border-color: var(--warn);
+}
+
+/* The name field, with room for a face beside it. */
+.prow-named {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/*
+ * The slot is always the same width whether or not there is a letter in it,
+ * so the name field cannot jump sideways on the first keystroke. It only
+ * draws its circle once there is something to put in it.
+ */
+.prow-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-self: center;
+  border-radius: 50%;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: transparent;
+  transition:
+    background-color var(--tap) ease,
+    color var(--tap) ease;
+}
+
+.prow-avatar[data-filled] {
+  background: var(--blue);
+  color: var(--cream);
+}
+
+.prow-named input {
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * Out of the way until wanted. Three permanently greyed buttons on every row
+ * is a wall of disabled-looking furniture around the two fields that matter
+ * — but only where there is a pointer to hover with. On a touch screen there
+ * is no hover, so they stay visible and nothing becomes unreachable.
+ */
+.prow-tools {
+  display: flex;
+  gap: 0.25rem;
+  grid-column: 2;
+}
+
+@container (min-width: 44rem) {
+  .prow-tools {
+    grid-column: auto;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .prow-tools {
+    opacity: 0;
+    transition: opacity var(--tap) ease;
+  }
+
+  .prow:hover .prow-tools,
+  .prow:focus-within .prow-tools {
+    opacity: 1;
+  }
+}
+
+/* A new row arrives rather than appearing, so it is obvious which one it is
+   and where the cursor has gone. */
+.prow.is-new {
+  animation: prow-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes prow-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/*
+ * An opening in the list, not a decision — so deliberately outside the
+ * button system, the way .text-action is. A dashed edge the full width of
+ * the rows says "another one goes here" without competing with the one
+ * filled button on the screen.
+ */
+.add-person {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 1rem;
+  border: 1px dashed var(--on-light-soft);
+  border-radius: 0;
+  background: transparent;
+  color: var(--on-light);
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color var(--tap) ease,
+    border-color var(--tap) ease,
+    color var(--tap) ease;
+}
+
+.add-person:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--white);
+}
+
+.add-person:disabled {
+  border-color: var(--edge);
+  color: var(--on-light-soft);
   cursor: not-allowed;
 }
 
-.row-btn:focus-visible {
+.add-person:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -1029,12 +1470,72 @@ main.sheet-wide {
   color: var(--on-light-soft);
 }
 
-.order {
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--edge);
+.row-btn {
+  width: 32px;
+  height: 48px;
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+  transition:
+    background-color var(--tap) ease,
+    border-color var(--tap) ease,
+    color var(--tap) ease;
 }
 
+.row-btn:hover:not(:disabled) {
+  background: var(--btn-wash);
+  border-color: var(--ink);
+}
+
+.row-btn:disabled {
+  color: var(--edge);
+  cursor: not-allowed;
+}
+
+.row-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* A value that has not been given yet. Says what it is waiting for, because
+   four em-dashes in a column reads as a page that has broken rather than one
+   that has not been filled in. */
+.is-unset {
+  color: var(--on-light-soft);
+  font-weight: 400;
+  font-size: 0.9375rem;
+}
+
+/* A value that has just changed; see components/Changing.tsx. */
+.changing {
+  display: inline-block;
+  animation: settle 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/*
+ * The payout list's heading, in the recap.
+ *
+ * This is all that survives of the old member-rows block, which defined
+ * `.rows` and `.row` for the /create form. Those are the same class names
+ * the /circle screen uses for its key/value list, and the later definition
+ * was winning: on a finished circle, "People" and "Each person put in" were
+ * being laid out as a 24px grid column, which is why those labels wrapped a
+ * character at a time. Nothing reported it, because /create looked right.
+ *
+ * The member rows are `.prow` now, under `.people`, and share no name with
+ * anything else.
+ */
 .order-label {
   display: block;
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1043,75 +1544,6 @@ main.sheet-wide {
   letter-spacing: 0.14em;
   color: var(--on-light-soft);
   margin-bottom: 0.5rem;
-}
-
-.order ol {
-  margin: 0;
-  padding-left: 1.25rem;
-  font-size: 1rem;
-}
-
-.order li {
-  padding: 0.125rem 0;
-}
-
-/* Everything the button is about to do, on one line. */
-.summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
-  border: 1px solid var(--ink);
-  background: var(--cream);
-  padding: 0.875rem 1rem;
-  margin-bottom: 0.75rem;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.8125rem;
-  letter-spacing: 0.03em;
-}
-
-.summary > span + span::before {
-  content: "·";
-  margin-right: 0.75rem;
-  color: var(--on-light-soft);
-}
-
-/* ---------------------------------------------------------- skeletons */
-
-/*
- * The shape of the answer, while it is being read from the chain.
- *
- * These exist to hold the room, not to entertain: the circle screen used to
- * show one line of "Loading…" and then replace it with a heading, a summary,
- * a wallet bar and a list of people, which moved everything several hundred
- * pixels at the exact moment someone was reaching for it. A skeleton that is
- * a different size from the content it stands in for is worse than none.
- */
-.skel {
-  display: block;
-  background: var(--edge);
-  border-radius: 0;
-  animation: skel 1.4s ease-in-out infinite;
-}
-
-.skel-text {
-  height: 1.05em;
-  max-width: 100%;
-}
-
-.skel-small {
-  height: 0.8em;
-  margin-top: 0.45rem;
-  opacity: 0.6;
-}
-
-@keyframes skel {
-  0%,
-  100% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 0.7;
-  }
 }
 
 /* ------------------------------------------------------------ notices */
@@ -1298,7 +1730,9 @@ main.sheet-wide {
  */
 @media (prefers-reduced-motion: reduce) {
   .skel,
-  .notice.is-done {
+  .notice.is-done,
+  .prow.is-new,
+  .changing {
     animation: none;
   }
 }
