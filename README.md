@@ -281,8 +281,8 @@ theft between users, not a drain of the contract.
 
 ### Tests
 
-26 tests, `npm test --prefix contracts`, including the five regression tests
-above, plus a full end-to-end circle on the live testnet contract — create,
+30 tests, `npm test --prefix contracts`, including the five regression tests
+above, four that bound what the payout relayer can do, plus a full end-to-end circle on the live testnet contract — create,
 approve, join, start, three disburses — with Rota's USDC balance read as 0 at
 every cycle and Rota never an endpoint of a transfer.
 
@@ -303,6 +303,125 @@ None of the above is a substitute for a professional audit. Static analysis
 finds shapes it has patterns for; a suite tests what its author thought of.
 Neither reasons about economic design, incentive failure, or what a determined
 attacker does with a week and the source. Rota is unaudited. Use small amounts.
+
+## Automatic payouts
+
+A round can settle itself. An hourly job reads every circle, finds the ones
+that have come due, and calls `disburse` for each — so a circle keeps running
+when nobody is looking at it.
+
+### The relayer has no special power
+
+This is the part worth being suspicious of, so it is worth stating precisely.
+The relayer is a funded wallet. It is not an operator, an admin, or a
+privileged role, because **Rota has no such thing to give it**:
+
+| Could it… | No, because |
+| --- | --- |
+| take a payout for itself | `disburse` always pays `members[cycleIndex]`. The caller is never read. |
+| move a member's USDC | Members grant their allowance to the Rota contract. No member has ever granted the relayer anything, so `transferFrom` reverts for it like it would for you. |
+| settle a round early, or out of order | The schedule is contract state. A caller cannot advance it; `disburse` reverts with `NotDue`. |
+| pause, sweep, upgrade, or change a fee | Rota exposes no such function. Its entire mutating surface is `createCircle`, `join`, `start`, `disburse`, and every one of them is callable by anyone. |
+
+Its only privilege is being awake. Anything it does, any member could have
+done from the circle page, and the relayer holds no key to anything but its own
+gas money.
+
+Those four rows are tests, not assurances —
+[`contracts/test/Relayer.t.ts`](contracts/test/Relayer.t.ts). The last one
+asserts the mutating ABI is exactly those four functions, so a privileged
+function added later fails the suite rather than quietly shipping.
+
+### It never sends a transaction that will revert
+
+Before signing anything, each due circle is checked twice:
+
+1. **`previewRound`** — the contract's own view of who is short or has not
+   joined. If anyone is, nothing is sent, and the circle page says who everyone
+   is waiting for: *"Rota can't send this round yet. Waiting on Chidi to top
+   up."* That is the same view the page renders, so the scheduler's reason and
+   the member's reason are one fact rather than two that can disagree.
+2. **A simulation of the exact call** — which catches what `previewRound`
+   cannot: a round a member settled a second ago, a paused token, a compliance
+   hold.
+
+A doomed `disburse` would cost gas, tell the members nothing, and look
+identical to a relayer that is simply broken, which is the one failure that
+must stay diagnosable. The decision is a pure function and is tested directly
+(`npm run check:cron --prefix web`), because in production the evidence of a
+correct decision is a transaction that does not exist.
+
+### The manual button never goes away
+
+A circle must work when the scheduler does not. Every member can still settle
+a round themselves from the circle page, at any time, and that path is
+unchanged — the relayer is a convenience layered on top of it, never a
+dependency. `/circle` shows who set each round going: the scheduler, a member
+by name, or "someone outside the circle", read from the transaction's sender.
+
+### Configuring it
+
+| Variable | |
+| --- | --- |
+| `RELAYER_PRIVATE_KEY` | The wallet that pays gas. **Server-only — never `NEXT_PUBLIC_`.** Leave unset and circles work exactly as before, members pressing the button themselves. |
+| `CRON_SECRET` | Vercel sends `Authorization: Bearer $CRON_SECRET`. The route **fails closed**: with no secret it refuses everything, because an open endpoint lets anyone burn the gas budget the next round needs. |
+| `RELAYER_MIN_USDC` | Warn below this. Default 1. |
+
+Fund the relayer with a small USDC balance — on Arc, gas is paid in the same
+USDC the circles move, so its balance is read through the ERC-20 at 6 decimals
+like every other amount in this project, never through the 18-decimal native
+balance. Each run logs that balance and warns when it is low:
+
+```
+[cron] relayer {"chainId":5042,"relayer":"0x…","usdc":"4.21","low":false,"minimum":"1.00"}
+```
+
+The schedule lives in [`web/vercel.json`](web/vercel.json). **Hourly cron needs
+a Vercel plan above Hobby**, which allows one run a day; a daily run still
+works, it just settles rounds up to a day late.
+
+`npm run check:secrets --prefix web` scans the built client bundle for the name
+and the value of every server-only secret, including this key, and fails the
+build if either appears.
+
+### What is not stored
+
+There is no record of past attempts — no database, and none added for this.
+Every reason the page gives is derived live from `previewRound`, which is
+strictly more accurate than a stored snapshot and cannot go stale. What that
+costs: you cannot ask "why did nothing happen at 3am last Tuesday" from the
+UI. The answer is in the function logs, under `[cron]`. If that history is
+worth a datastore later, it is a small addition — it is left out because
+nothing yet needs it.
+
+### Sign-in email
+
+Rota never sends an email. The one-time code comes from Circle, triggered by
+`createDeviceTokenForEmailLogin` — grep this repo for an SMTP client and you
+will not find one, because there is nothing here to configure. The sending
+domain and provider are set on **Circle's side**, in the Console for the
+project that `CIRCLE_API_KEY` belongs to, and a sandbox catcher like Mailtrap
+means codes are delivered into a trap rather than to the person waiting for
+one.
+
+Use **Resend** for the production sender: it exposes plain SMTP
+(`smtp.resend.com:587`, username `resend`, password an API key), which is what
+Circle wants, its free tier covers this project several times over, and its
+domain setup is a guided SPF/DKIM flow rather than a pile of raw DNS. Amazon
+SES is cheaper at volume and Postmark has better transactional deliverability,
+but both cost more setup than this needs.
+
+Whatever the provider, three things have to be true or codes land in spam:
+
+- **SPF** — the sending domain's TXT record includes the provider.
+- **DKIM** — the provider's signing keys published as CNAME or TXT records.
+- **DMARC** — at least `v=DMARC1; p=none; rua=mailto:…`, so failures are visible.
+
+When delivery is not configured, the app already says so rather than shrugging:
+the Circle error classifier maps sender and SMTP failures to a message that
+tells the person no code will arrive however many times they retry, and logs
+the full upstream error under `[circle]`. See
+[`web/lib/server/circle-errors.ts`](web/lib/server/circle-errors.ts).
 
 ## Running it locally
 

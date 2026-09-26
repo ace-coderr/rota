@@ -30,6 +30,15 @@ export type Turn = {
   /** Only present when the log for this turn was found. */
   hash?: `0x${string}`;
   timestamp?: bigint;
+  /**
+   * Who sent the transaction that settled this turn.
+   *
+   * Not in the event, and deliberately not added to it: the contract does not
+   * care who calls `disburse`, and putting the caller in the log would imply
+   * it does. It comes from the transaction's own `from`, which is the only
+   * place the answer honestly lives.
+   */
+  by?: Address;
 };
 
 /** Primary source. Derived purely from state, so this never fails. */
@@ -70,10 +79,15 @@ const BACK_OFF_BLOCKS = 500n;
 /** Per turn, and overall, so a long circle cannot hang the page. */
 const MAX_WINDOWS_PER_TURN = 3;
 const MAX_TOTAL_RANGE_CALLS = 30;
-const MAX_POINT_LOOKUPS = 45;
+// Two per settled turn now — a block for the timestamp and a transaction
+// for the sender — plus the block searches that locate each turn.
+const MAX_POINT_LOOKUPS = 70;
 
 export type DisbursementLinks = {
-  byIndex: Record<number, { hash: `0x${string}`; timestamp?: bigint }>;
+  byIndex: Record<
+    number,
+    { hash: `0x${string}`; timestamp?: bigint; by?: Address }
+  >;
   complete: boolean;
   calls: number;
 };
@@ -240,6 +254,21 @@ export function useDisbursementLinks(
           } catch {
             // A missing timestamp just means that turn shows without a date.
           }
+
+          /*
+           * Who sent it. Same budget as the timestamp and the same rules: a
+           * turn whose sender cannot be fetched simply does not say who
+           * triggered it, rather than guessing or blocking the row.
+           */
+          if (!spendLookup()) continue;
+          try {
+            const tx = await client.getTransaction({
+              hash: byIndex[index].hash,
+            });
+            byIndex[index].by = tx.from;
+          } catch {
+            // Shown without attribution.
+          }
         }
       } catch {
         // Whatever the reason, the history still renders from state.
@@ -262,6 +291,30 @@ export function withLinks(
   if (!links) return turns;
   return turns.map((turn) => {
     const found = links.byIndex[turn.index];
-    return found ? { ...turn, hash: found.hash, timestamp: found.timestamp } : turn;
+    return found
+      ? { ...turn, hash: found.hash, timestamp: found.timestamp, by: found.by }
+      : turn;
   });
+}
+
+/**
+ * Who set a round going, in words.
+ *
+ * `disburse` is permissionless, so the honest set of answers is: the
+ * scheduler, one of the members, or somebody else entirely. That last case is
+ * not a bug and is not hidden — anyone may pay a circle's round for it, they
+ * just cannot change who gets paid.
+ */
+export function triggeredBy(
+  by: Address | undefined,
+  relayer: Address | undefined,
+  members: readonly Address[] | undefined,
+  nameOf: (member: Address) => string,
+): string | undefined {
+  if (!by) return undefined;
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+  if (relayer && same(by, relayer)) return "Rota, automatically";
+  if (members?.some((m) => same(m, by))) return nameOf(by);
+  return "someone outside the circle";
 }

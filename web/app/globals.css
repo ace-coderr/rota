@@ -1604,6 +1604,56 @@ input.prow-addr.is-wrong {
   }
 }
 
+/* -------------------------------------------------- automatic payouts */
+
+/*
+ * What happens if nobody presses anything.
+ *
+ * A strip, not a notice. Automatic payment is the ordinary case and must not
+ * be dressed as a problem — the notices on this page are for things that need
+ * somebody, and this is the opposite of that. It also never replaces the
+ * button above it: the circle has to work when the scheduler is down, so the
+ * manual path stays exactly where it was.
+ */
+.auto {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  border: 1px solid var(--edge);
+  background: var(--white);
+  padding: 0.875rem 1rem;
+  margin: 1.25rem 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.auto-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-top: 0.55rem;
+  border-radius: 50%;
+  background: var(--blue);
+}
+
+/* Held up on a person, not broken. Amber rather than red for the same reason
+   the strip is not a notice: nothing has gone wrong, something is pending. */
+.auto-held {
+  border-color: var(--warn);
+}
+
+.auto-held .auto-dot {
+  background: var(--warn);
+}
+
+.auto-text {
+  min-width: 0;
+}
+
+.auto-warn {
+  color: var(--warn);
+}
+
 /* ------------------------------------------------------------- people */
 
 .person {

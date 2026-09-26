@@ -29,6 +29,14 @@ import {
   walletNeeded,
 } from "@/lib/money";
 import { useNames, useNamesFromInvite } from "@/lib/people";
+import {
+  triggeredBy,
+  turnsFromState,
+  useDisbursementLinks,
+  withLinks,
+} from "@/lib/history";
+import { useRelayer } from "@/lib/useRelayer";
+import { txUrl } from "@/lib/explorer";
 import { ROTA_ABI } from "@/lib/rota";
 import { NOTHING_CONFIGURED, deploymentFor } from "@/lib/deployments";
 import { ConfigNotice } from "@/components/ConfigNotice";
@@ -71,6 +79,9 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
   const [pending, setPending] = useState<string | undefined>();
   const [done, setDone] = useState<string | undefined>();
   const [showNames, setShowNames] = useState(false);
+
+  /** Who pays for rounds nobody presses a button for. Optional, always. */
+  const { data: relayer } = useRelayer();
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   const deployment = deploymentFor(chainId);
@@ -197,12 +208,52 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
     (s) => s.index >= cycleIndex && s.index !== myIndex,
   );
 
+  /*
+   * The rounds that have already happened, and who set each one going.
+   *
+   * Derived from state, like everywhere else; the transaction lookup only
+   * decorates it and is allowed to come back empty. A round with no
+   * attribution says nothing about who paid rather than guessing.
+   */
+  const paidTurns = turnsFromState(members, cycleIndex, contribution);
+  const turnLinks = useDisbursementLinks(
+    deployment,
+    circleId,
+    paidTurns,
+    circle
+      ? {
+          period: circle.period,
+          nextDueAt: circle.nextDueAt,
+          cycleIndex,
+        }
+      : undefined,
+  );
+  const rounds = withLinks(paidTurns, turnLinks.data);
+
   const chainNow = latestBlock?.timestamp;
   const due = Boolean(
     started && chainNow !== undefined && circle && chainNow >= circle.nextDueAt,
   );
 
   const busy = pending !== undefined;
+
+  /**
+   * Why the scheduler cannot settle the next round, named.
+   *
+   * Empty string when nothing is in the way. The wording is deliberately
+   * about people rather than about allowances and balances: "waiting on Chidi
+   * to top up" is something a person can act on, and "insufficient allowance"
+   * is not.
+   */
+  const autoBlocked = (() => {
+    if (!started || finished) return "";
+    const joins = notJoined.map((entry) => entry.name);
+    const tops = [...notFunded, ...stopped].map((entry) => entry.name);
+    const parts: string[] = [];
+    if (joins.length > 0) parts.push(`${nameList(joins)} to join`);
+    if (tops.length > 0) parts.push(`${nameList(tops)} to top up`);
+    return parts.join(", and ");
+  })();
 
   /*
    * A transaction that worked should say so, and then stop saying so.
@@ -372,6 +423,58 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
 
   // ----------------------------------------------------------------- people
 
+  /*
+   * Who set each round going.
+   *
+   * `disburse` is permissionless, so this is a real question with three real
+   * answers: the scheduler, a member, or anyone else who felt like paying the
+   * gas for them. Defined once and shown on both the running circle and the
+   * finished receipt, because a record that says different things in two
+   * places is worse than no record.
+   */
+  const roundsList = rounds.length > 0 && (
+    <>
+      <h2>Rounds so far</h2>
+      <div className="card">
+        {rounds.map((turn) => {
+          const who = triggeredBy(
+            turn.by,
+            relayer?.configured ? relayer.address : undefined,
+            members,
+            naming.nameOf,
+          );
+          return (
+            <div className="person" key={turn.index}>
+              <span className="person-turn">{turn.index + 1}.</span>
+              <span>
+                <span className="person-name">
+                  {naming.nameOf(turn.recipient)} received{" "}
+                  {money(turn.amount, decimals)} USDC
+                </span>
+                <br />
+                <span className="person-detail">
+                  {who ? `Sent by ${who}` : "Sent"}
+                  {turn.hash && deployment && (
+                    <>
+                      {" \u00b7 "}
+                      <a
+                        href={txUrl(deployment.explorer, turn.hash)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        See the record
+                      </a>
+                    </>
+                  )}
+                </span>
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
   const peopleList = (
     <>
       <h2>Everyone in this circle</h2>
@@ -472,6 +575,8 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
             </div>
           </dl>
         </div>
+
+          {roundsList}
 
         {peopleList}
 
@@ -757,6 +862,59 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
           {actionNote && <p className="action-note">{actionNote}</p>}
         </div>
       )}
+
+      {/*
+        What happens if nobody presses anything.
+
+        Deliberately a quiet strip rather than a notice: automatic payment is
+        the normal case and should not look like a problem. It never replaces
+        the button above — the circle has to work when the scheduler is down,
+        and a member has to be able to settle their own round at any time.
+
+        The blocked reason is computed from the same previewRound the scheduler
+        reads, so the two can never disagree about who everyone is waiting for.
+      */}
+      {relayer?.configured && !rotaBlocked && (
+        <div className={`auto${autoBlocked ? " auto-held" : ""}`}>
+          <span className="auto-dot" aria-hidden="true" />
+          <span className="auto-text">
+            {!started ? (
+              <>
+                Once everyone has joined and the circle starts, Rota sends each
+                round on time by itself. Nobody has to be around.
+              </>
+            ) : autoBlocked ? (
+              <>
+                <strong>Rota can’t send this round yet.</strong> Waiting on{" "}
+                {autoBlocked}. It goes out on its own as soon as that’s sorted
+                — or anyone in the circle can send it.
+              </>
+            ) : due ? (
+              <>
+                <strong>This round is due.</strong> Rota sends it within the
+                hour, and anyone in the circle can send it now instead.
+              </>
+            ) : (
+              <>
+                Rota sends the next round automatically,{" "}
+                {whenInWords(circle?.nextDueAt)}. Nobody has to be around.
+              </>
+            )}
+            {relayer.low && (
+              <>
+                {" "}
+                <span className="auto-warn">
+                  Rota’s payer is low on funds ({relayer.usdc} USDC), so a round
+                  may not go out on time. Anyone in the circle can still send
+                  it.
+                </span>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      {roundsList}
 
       {peopleList}
 

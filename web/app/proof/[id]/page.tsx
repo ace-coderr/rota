@@ -11,7 +11,13 @@ import { CountUp } from "@/components/Reveal";
 import { TurnRing } from "@/components/TurnRing";
 import { addressUrl, txUrl } from "@/lib/explorer";
 import { dateInWords, money, shortAddress } from "@/lib/format";
-import { turnsFromState, useDisbursementLinks, withLinks } from "@/lib/history";
+import {
+  triggeredBy,
+  turnsFromState,
+  useDisbursementLinks,
+  withLinks,
+} from "@/lib/history";
+import { useRelayer } from "@/lib/useRelayer";
 import { useNames, useNamesFromInvite } from "@/lib/people";
 import { ROTA_ABI } from "@/lib/rota";
 import { ERC20_ABI, USDC_ADDRESS } from "@/lib/usdc";
@@ -81,6 +87,9 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
   const memberList = (members as Address[] | undefined) ?? [];
   useNamesFromInvite(id);
   const naming = useNames(id, memberList);
+  // Only so a round paid by the scheduler can say so by name rather than
+  // by address. Nothing on this page depends on it resolving.
+  const { data: relayer } = useRelayer();
 
   const contribution = circle ? (circle[0] as bigint) : 0n;
   const period = circle ? (circle[1] as bigint) : 0n;
@@ -270,6 +279,15 @@ export default function ProofPage({ params }: PageProps<"/proof/[id]">) {
                   </span>
                   <br />
                   <span className="person-detail">
+                    {(() => {
+                      const who = triggeredBy(
+                        turn.by,
+                        relayer?.configured ? relayer.address : undefined,
+                        memberList,
+                        naming.nameOf,
+                      );
+                      return who ? <>Sent by {who} · </> : null;
+                    })()}
                     {turn.hash ? (
                       <>
                         {turn.timestamp && `${dateInWords(turn.timestamp)} · `}
