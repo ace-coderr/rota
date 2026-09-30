@@ -1,0 +1,168 @@
+name: Settle due rounds
+
+# Vercel's Hobby plan runs cron once a day, which cannot settle an hourly
+# circle. This does the hourly pass; web/vercel.json keeps its daily one as a
+# backstop for when Actions is down or the repo goes quiet.
+#
+# Both hitting the same endpoint is safe by construction. `disburse` reverts
+# unless a round is actually due, and the route simulates the call before
+# signing anything — so a round one trigger has already settled is simply not
+# due when the other arrives, and nothing is sent.
+#
+# The trigger is permissionless. This calls the same public endpoint anyone
+# could, and the relayer behind it only ever pays gas: `disburse` always pays
+# members[cycleIndex] and never the caller, and no member has granted that
+# address an allowance. Being on a schedule is its only privilege.
+
+on:
+  schedule:
+    # Seventeen past, not on the hour — GitHub's scheduler is best-effort and
+    # the top of the hour is when everyone else's cron is queued too.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+# Nothing is checked out and nothing is written. This workflow reads no repo
+# contents, so it is given no access to any.
+permissions: {}
+
+concurrency:
+  # Never two at once. The endpoint would refuse the second one safely, but
+  # serialising keeps the logs readable and the relayer's nonces simple.
+  group: disburse
+  cancel-in-progress: false
+
+jobs:
+  settle:
+    name: settle
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Call the payout endpoint
+        env:
+          # Through the environment, never interpolated into the script.
+          # `${{ }}` inside a run block pastes the value into the shell source
+          # itself, where it can end up in an error trace and where a value
+          # containing shell syntax would be executed.
+          ROTA_URL: ${{ secrets.ROTA_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ROTA_URL:-}" ] || [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::ROTA_URL and CRON_SECRET must both be set as repository secrets."
+            exit 1
+          fi
+
+          # Tolerate a trailing slash so the URL secret can be pasted either way.
+          base="${ROTA_URL%/}"
+
+          # -sS: quiet, but still report transport errors. The header is built
+          # from the variable, so the secret never appears in the command line
+          # that a failing shell would echo.
+          status=$(curl -sS \
+            --max-time 120 \
+            --retry 2 --retry-delay 5 --retry-connrefused \
+            -o response.json \
+            -w '%{http_code}' \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${base}/api/cron/disburse") || {
+              echo "::error::Could not reach ${base}/api/cron/disburse"
+              exit 1
+            }
+
+          echo "HTTP ${status}"
+
+          if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+            echo "::error::Payout endpoint returned ${status}"
+            # The body carries no secret — it is chain state and a relayer
+            # address, both public — so printing it is what makes a 401 or a
+            # missing relayer diagnosable without opening Vercel.
+            cat response.json
+            exit 1
+          fi
+
+          node -e 'const r=require("./response.json");console.log(`${(r.chains??[]).length} chain(s), ${r.ms ?? "?"}ms`)'
+
+      - name: Summarise
+        if: always()
+        run: |
+          set -uo pipefail
+          [ -f response.json ] || exit 0
+
+          # Node, not jq: the runner has both, but only one of them could be
+          # tested before this shipped. A summary filter that silently fails
+          # leaves an empty job log every hour, which is precisely the thing
+          # this step exists to prevent.
+          cat > summarise.mjs <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const report = JSON.parse(readFileSync("response.json", "utf8"));
+          const out = ["## Rounds", ""];
+
+          // The route answers 503 with a message and no chains when the relayer is not
+          // configured. That is the single most likely reason for a silent hour, so it
+          // gets said plainly rather than rendering as an empty report.
+          if (!report.chains) {
+            out.push(`> ${report.message ?? "The endpoint returned no chains."}`);
+            console.log(out.join("\n"));
+            process.exit(0);
+          }
+
+          for (const chain of report.chains ?? []) {
+            out.push(
+              `### ${chain.label} — scanned ${chain.circlesScanned}, due ${chain.due}` +
+                (chain.capped ? "  _(scan capped; older circles not checked)_" : ""),
+            );
+            out.push("");
+
+            if (chain.error) {
+              out.push(`> **This chain failed:** ${chain.error}`, "");
+            }
+
+            const relayer = chain.relayer ?? {};
+            out.push(
+              relayer.low
+                ? `> **Relayer is low:** ${relayer.formatted} USDC, under ${relayer.minimum}. Top up \`${relayer.address}\`.`
+                : `Relayer holds ${relayer.formatted ?? "—"} USDC.`,
+              "",
+            );
+
+            if (!chain.circles?.length) {
+              out.push("Nothing was due.", "");
+              continue;
+            }
+
+            for (const circle of chain.circles) {
+              if (circle.state === "paid") {
+                out.push(
+                  `- **Circle ${circle.circleId}** — settled round ${circle.cycle},` +
+                    ` paid \`${circle.recipient}\` in \`${circle.hash}\``,
+                );
+              } else if (circle.state === "blocked") {
+                const waiting = (circle.waitingOn ?? []).join(", ");
+                out.push(
+                  `- **Circle ${circle.circleId}** — held: ${circle.reason}` +
+                    (waiting ? ` Waiting on ${waiting}.` : ""),
+                );
+              } else {
+                out.push(`- **Circle ${circle.circleId}** — skipped: ${circle.reason}`);
+              }
+            }
+            out.push("");
+          }
+
+          const paid = (report.chains ?? []).flatMap((c) => c.circles ?? [])
+            .filter((c) => c.state === "paid").length;
+          const held = (report.chains ?? []).flatMap((c) => c.circles ?? [])
+            .filter((c) => c.state === "blocked").length;
+          const skipped = (report.chains ?? []).flatMap((c) => c.circles ?? [])
+            .filter((c) => c.state === "skipped").length;
+
+          out.push(`**${paid} settled, ${held} held, ${skipped} skipped.**`);
+          console.log(out.join("\n"));
+          NODE
+
+          # Into the job log AND the run summary, so a held round is visible
+          # from the Actions list without opening this job or Vercel.
+          node summarise.mjs | tee -a "$GITHUB_STEP_SUMMARY"

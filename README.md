@@ -376,13 +376,67 @@ balance. Each run logs that balance and warns when it is low:
 [cron] relayer {"chainId":5042,"relayer":"0x…","usdc":"4.21","low":false,"minimum":"1.00"}
 ```
 
-The schedule lives in [`web/vercel.json`](web/vercel.json). **Hourly cron needs
-a Vercel plan above Hobby**, which allows one run a day; a daily run still
-works, it just settles rounds up to a day late.
-
 `npm run check:secrets --prefix web` scans the built client bundle for the name
 and the value of every server-only secret, including this key, and fails the
 build if either appears.
+
+### Two triggers, one endpoint
+
+Vercel's Hobby plan runs cron **once a day**, which cannot settle an hourly
+circle. So the hourly pass comes from GitHub Actions
+([`.github/workflows/disburse.yml`](.github/workflows/disburse.yml)) and
+[`web/vercel.json`](web/vercel.json) keeps its daily one as a backstop for when
+Actions is down or the repo goes quiet.
+
+**Both hitting the same endpoint is safe by construction.** `disburse` reverts
+unless a round is genuinely due, and the route simulates the call before
+signing anything — so a round one trigger has already settled is simply not due
+when the other arrives, and nothing is sent. Overlap costs a read, not a
+transaction.
+
+**The trigger is permissionless.** Actions calls the same public endpoint
+anyone could call, and holds nothing but a shared secret that rate-limits who
+may spend the relayer's gas. The relayer behind it has no power either: it
+pays gas, `disburse` always pays `members[cycleIndex]` rather than the caller,
+and no member has granted that address an allowance. Being on a schedule is
+its only privilege. The workflow checks nothing out, is granted
+`permissions: {}`, and passes its secrets through `env:` rather than
+interpolating them into a shell script.
+
+Where each secret goes:
+
+| | Vercel | GitHub Actions |
+| --- | --- | --- |
+| `RELAYER_PRIVATE_KEY` | ✅ Project → Settings → Environment Variables | ❌ never — the workflow signs nothing |
+| `CRON_SECRET` | ✅ same place | ✅ Settings → Secrets and variables → Actions |
+| `RELAYER_MIN_USDC` | ✅ optional | ❌ |
+| `ROTA_URL` | ❌ | ✅ your deployment's origin, e.g. `https://userota.vercel.app` |
+
+The two `CRON_SECRET` values must match — one is checked against the other.
+No key material goes anywhere near GitHub.
+
+To fire it by hand: **Actions → Settings due rounds → Run workflow**, or
+
+```bash
+gh workflow run disburse.yml
+gh run watch
+```
+
+Every run prints a summary — circles scanned, what was due, what settled, and
+what was held and why — into both the job log and the run page, so a held round
+is visible from the Actions list without opening Vercel:
+
+```
+### Arc — scanned 12, due 3
+Relayer holds 4.21 USDC.
+- **Circle 7** — settled round 2, paid `0xc416…F200` in `0xabc…`
+- **Circle 9** — held: Someone does not have enough to cover this round. Waiting on 0x8F20…6444.
+- **Circle 11** — skipped: Would have reverted, so nothing was sent: NotDue(...)
+```
+
+A scheduled workflow is disabled after 60 days of repo inactivity, and
+GitHub's scheduler is best-effort under load — which is the other reason the
+daily Vercel cron stays.
 
 ### What is not stored
 
