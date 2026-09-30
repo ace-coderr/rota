@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 
 import { RotaWordmark } from "@/components/Logo";
@@ -33,9 +33,54 @@ export function NavBar() {
   const [scrolled, setScrolled] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
 
-  const { isConnected } = useAccount();
+  const { isConnected, status: accountStatus } = useAccount();
   const circle = useCircleWallet();
   const signedIn = isConnected || circle.status === "ready";
+
+  /*
+   * Signing in on the marketing page should land you on your circles.
+   *
+   * The hard part is not the redirect, it is not doing it to someone who
+   * merely revisited the landing page with a session already in place. Two
+   * different signals, because the two sign-in paths fail differently:
+   *
+   * - Circle (Google, email): `signInCount` only moves in the SDK's login
+   *   callback. Google leaves the site and comes back to "/", so the session
+   *   arrives during a fresh page load and is otherwise indistinguishable
+   *   from a restore — status alone cannot tell them apart.
+   *
+   * - An injected wallet never leaves the page, so a transition is enough,
+   *   as long as we first see it SETTLED and signed out. wagmi reports
+   *   "reconnecting" while it restores, and treating that as signed out
+   *   would redirect every returning visitor.
+   */
+  const router = useRouter();
+  const firstCount = useRef<number | null>(null);
+  const sawSignedOut = useRef(false);
+
+  useEffect(() => {
+    if (firstCount.current === null) {
+      firstCount.current = circle.signInCount;
+    }
+
+    const settling =
+      accountStatus === "connecting" ||
+      accountStatus === "reconnecting" ||
+      circle.status === "loading" ||
+      circle.status === "signing-in";
+
+    if (!settling && !signedIn) sawSignedOut.current = true;
+
+    const justSignedIn =
+      circle.signInCount > (firstCount.current ?? 0) ||
+      (sawSignedOut.current && signedIn);
+
+    if (justSignedIn && (pathname === "/" || pathname === "")) {
+      sawSignedOut.current = false;
+      firstCount.current = circle.signInCount;
+      router.push("/circles");
+    }
+  }, [circle.signInCount, circle.status, accountStatus, signedIn, pathname, router]);
 
   useEffect(() => {
     if (!onDark) return;
@@ -54,6 +99,13 @@ export function NavBar() {
       </Link>
 
       <div className="nav-links">
+        {/* Only once there is an address, because the page has nothing to say
+            without one and a dead link in the bar is worse than no link. */}
+        {signedIn && (
+          <Link href="/circles" className="nav-link">
+            My circles
+          </Link>
+        )}
         <Link href="/#how-it-works" className="nav-link">
           How it works
         </Link>

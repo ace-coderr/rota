@@ -65,6 +65,18 @@ type CircleContextValue = {
   message?: string;
   wallet?: CircleWallet;
   address?: Address;
+  /**
+   * Bumped only when someone actually signs in, never when a stored session
+   * is restored.
+   *
+   * The two are indistinguishable from status alone — both end at "ready" —
+   * and telling them apart is the whole difficulty in "send them to /circles
+   * after sign-in". Google's flow makes it worse: it leaves the site and
+   * returns to the landing page, so the session arrives during a fresh page
+   * load and looks exactly like revisiting with a cookie. Only the SDK's
+   * login callback knows, so the counter is set there and nowhere else.
+   */
+  signInCount: number;
   signInWithGoogle: () => Promise<void>;
   sendEmailCode: (email: string) => Promise<void>;
   verifyEmailCode: () => void;
@@ -207,6 +219,9 @@ export function CircleWalletProvider({
     userToken?: string;
     encryptionKey?: string;
   }>({});
+  /* See CircleContextValue.signInCount. Incremented in the login callback
+     only — never on the boot path that reads tokens back out of storage. */
+  const [signInCount, setSignInCount] = useState(0);
 
   /** Pulls the user's wallets and picks the one for the chain in use. */
   const loadWallets = useCallback(async (userToken: string) => {
@@ -333,6 +348,9 @@ export function CircleWalletProvider({
           store.set("userToken", userToken);
           store.set("encryptionKey", encryptionKey);
           setSession({ userToken, encryptionKey });
+          // A real sign-in, as opposed to the boot path below which restores
+          // the same tokens from storage and must not count.
+          setSignInCount((n) => n + 1);
         };
 
         const sdk = new W3SSdk(
@@ -591,6 +609,7 @@ export function CircleWalletProvider({
       message,
       wallet,
       address: wallet?.address,
+      signInCount,
       signInWithGoogle,
       sendEmailCode,
       verifyEmailCode,
@@ -601,6 +620,7 @@ export function CircleWalletProvider({
       status,
       message,
       wallet,
+      signInCount,
       signInWithGoogle,
       sendEmailCode,
       verifyEmailCode,

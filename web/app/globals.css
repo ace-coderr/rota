@@ -1604,6 +1604,131 @@ input.prow-addr.is-wrong {
   }
 }
 
+/* ---------------------------------------------------------- my circles */
+
+/*
+ * A list of circles, one card each, the whole card a link.
+ *
+ * Qualified with the element, or `main.sheet` above — (0,1,1) — keeps its
+ * 35rem measure and the rows have nowhere to put five facts. Same trap as
+ * `.sheet-wide`; see the convention at the top of this file.
+ */
+main.sheet-list {
+  max-width: 52rem;
+}
+
+.crows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.crow {
+  display: block;
+  border: 1px solid var(--edge);
+  background: var(--white);
+  padding: 1.125rem 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color var(--tap) ease,
+    box-shadow var(--tap) ease;
+}
+
+.crow:hover {
+  border-color: var(--ink);
+  box-shadow: 0 12px 30px -24px rgba(10, 10, 10, 0.55);
+}
+
+.crow:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The one that wants something from you wears the accent. Only this state,
+   so it cannot be mistaken for decoration on the others. */
+.crow-needs-join {
+  border-color: var(--ink);
+}
+
+.crow-complete {
+  background: transparent;
+}
+
+.crow-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.crow-tag {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--on-light-soft);
+}
+
+.crow-needs-join .crow-tag {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.crow-id {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.75rem;
+  color: var(--on-light-soft);
+}
+
+.crow-title {
+  display: block;
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 1.25rem;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  margin-bottom: 0.375rem;
+}
+
+.crow-facts {
+  display: block;
+  font-size: 1rem;
+  color: var(--on-light-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.crow-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-top: 0.875rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--edge);
+  font-size: 1rem;
+}
+
+.crow-owes {
+  font-variant-numeric: tabular-nums;
+}
+
+.crow-when {
+  font-size: 0.9375rem;
+  color: var(--on-light-soft);
+}
+
+/* Holds the room a row will take, so the list does not jump when the reads
+   land. Not a link, so it takes none of the interactive styling. */
+.crow-skel {
+  pointer-events: none;
+  margin-bottom: 0.75rem;
+}
+
 /* -------------------------------------------------- automatic payouts */
 
 /*

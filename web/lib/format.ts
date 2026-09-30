@@ -105,7 +105,8 @@ export function everyInWords(seconds: bigint | undefined): string {
   if (s % 86400 === 0) return plural(s / 86400, "day");
   if (s % 3600 === 0) return plural(s / 3600, "hour");
   if (s % 60 === 0) return plural(s / 60, "minute");
-  return `every ${s} seconds`;
+  // plural() handles the 1 case; the old literal said "every 1 seconds".
+  return plural(s, "second");
 }
 
 export const sameAddress = (a?: string, b?: string) =>

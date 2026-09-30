@@ -386,9 +386,14 @@ export default function CreatePage() {
         <Button href={`/circle/${circleId}`} size="lg" block>
           Open my circle
         </Button>
+        <Button href="/circles" size="lg" variant="secondary" block>
+          See all my circles
+        </Button>
         <p className="action-note">
           Nothing has been charged. Nobody pays anything until everyone has
-          joined and the circle starts.
+          joined and the circle starts. You can always find this circle again
+          under <Link href="/circles">My circles</Link> — you don’t need to
+          keep the link.
         </p>
       </main>
     );

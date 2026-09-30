@@ -22,7 +22,20 @@ const chains: [Chain, ...Chain[]] = arcMainnet
 
 export const wagmiConfig = createConfig({
   chains,
-  transports: Object.fromEntries(chains.map((chain) => [chain.id, http()])),
+  /*
+   * JSON-RPC batching, not multicall.
+   *
+   * /circles reads two calls per circle across a whole page of them, which as
+   * individual requests is dozens of round trips on a public RPC. wagmi would
+   * normally collapse those through multicall3, but that is a CONTRACT and
+   * neither Arc chain declares one — so the batching has to happen at the
+   * transport, where it is a plain JSON-RPC feature that needs nothing
+   * deployed. Verified against rpc.testnet.arc.network, which answers a
+   * batched request correctly rather than rejecting it.
+   */
+  transports: Object.fromEntries(
+    chains.map((chain) => [chain.id, http(undefined, { batch: true })]),
+  ),
   connectors: [injected()],
   ssr: true,
 });
