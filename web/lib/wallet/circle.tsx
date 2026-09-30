@@ -13,6 +13,7 @@ import {
 import type { Address, Hex } from "viem";
 
 import { ARC_MAINNET_CHAIN_ID, ARC_TESTNET_CHAIN_ID } from "./chains-ids";
+import { circleResources, circleTheme } from "./circle-theme";
 
 /**
  * Circle user-controlled wallets.
@@ -30,6 +31,8 @@ import { ARC_MAINNET_CHAIN_ID, ARC_TESTNET_CHAIN_ID } from "./chains-ids";
 type W3SSdkInstance = {
   getDeviceId: () => Promise<string>;
   updateConfigs: (configs: unknown) => void;
+  setThemeColor: (theme: unknown) => void;
+  setResources: (resources: unknown) => void;
   performLogin: (provider: unknown) => void;
   verifyOtp: () => void;
   setAuthentication: (auth: { userToken: string; encryptionKey: string }) => void;
@@ -351,6 +354,21 @@ export function CircleWalletProvider({
           },
           onLogin,
         ) as unknown as W3SSdkInstance;
+
+        /*
+         * Dress the modal before it can ever be shown.
+         *
+         * Applied here rather than at each call site: the modal opens from
+         * three different places — Google, the email code, and approving a
+         * transaction — and a theme applied at one of them arrives in Circle's
+         * default white from the other two. The SDK holds these on the
+         * instance and sends them with every open.
+         *
+         * circle-theme.ts says what this can and cannot reach; corners and a
+         * second typeface are not on the list.
+         */
+        sdk.setThemeColor(circleTheme);
+        sdk.setResources(circleResources);
 
         sdkRef.current = sdk;
 

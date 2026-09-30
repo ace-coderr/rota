@@ -423,6 +423,40 @@ tells the person no code will arrive however many times they retry, and logs
 the full upstream error under `[circle]`. See
 [`web/lib/server/circle-errors.ts`](web/lib/server/circle-errors.ts).
 
+### The verification modal
+
+Circle's modal — the one that asks for the emailed code, and later for a PIN
+when a transaction is approved — is an **iframe on `pw-auth.circle.com`**. It
+is a different origin, so no stylesheet in this app can touch it. The only way
+in is the `setThemeColor` / `setResources` payload the SDK posts to it, which
+is what [`web/lib/wallet/circle-theme.ts`](web/lib/wallet/circle-theme.ts)
+fills in: near-black surface, cream text, electric blue on the one filled
+button, and icons redrawn in the palette — including replacing the default
+blue circle on the email step with Rota's mark, and the close and back
+controls, which ship black-on-white and would otherwise be invisible.
+
+**Two things the SDK's theming cannot reach**, left as they are rather than
+worked around:
+
+- **Corners.** There is no radius, corner or shape key anywhere in the SDK's
+  `ThemeColor` type. The modal, its inputs and its buttons keep Circle's
+  rounded corners while every other control in Rota is square. This is a
+  visible break and there is no way to close it from here.
+- **A second typeface.** `Resources.fontFamily` is one `{ name, url }` for the
+  whole modal, so the six-digit code field cannot have IBM Plex Mono while the
+  prose keeps Source Sans 3. The modal is mostly sentences, so the single
+  family goes to Source Sans 3 and the code renders in the body face. Font
+  size, weight and tracking are equally out of reach.
+
+`npm run check:theme --prefix web` covers what can be checked from outside the
+iframe: that every icon decodes and carries an explicit colour rather than
+`currentColor` (which resolves to nothing in a foreign document), that each has
+an intrinsic size (an SVG without one renders at the browser's 150x150
+fallback, and we do not control the `img` tag), and that every colour clears
+WCAG contrast against the near-black surface. The key names themselves are not
+checked there because the file is typed against the SDK's own `ThemeColor` and
+`Resources`, so a typo is a build error.
+
 ## Running it locally
 
 ```bash
