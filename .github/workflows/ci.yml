@@ -67,6 +67,12 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Vercel reads vercel.json and next build does not, so an invalid one
+      # passes every check above and fails the deploy instead. A rejected
+      # `comment` key cost a red deployment; this is how that stops recurring.
+      - name: Validate vercel.json
+        run: npm run check:vercel
+
       # Builds without any ARC_MAINNET_* env vars set, which is the point:
       # mainnet config is optional and the app must build without it.
       - name: Build

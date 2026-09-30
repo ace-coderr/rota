@@ -3,7 +3,6 @@
   "crons": [
     {
       "path": "/api/cron/disburse",
-      "comment": "The backstop, for when GitHub Actions is down or the repo has gone quiet enough that its scheduled workflow was disabled. Daily, because Hobby allows no more; the hourly pass is .github/workflows/disburse.yml. Both hitting this endpoint is safe — a round the other already settled is simply not due. Offset from the top of the hour so the two triggers do not arrive together.",
       "schedule": "40 3 * * *"
     }
   ]

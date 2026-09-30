@@ -388,6 +388,24 @@ circle. So the hourly pass comes from GitHub Actions
 [`web/vercel.json`](web/vercel.json) keeps its daily one as a backstop for when
 Actions is down or the repo goes quiet.
 
+That backstop runs at **03:40 UTC**, daily — offset from the top of the hour so
+the two triggers never arrive together, and pinned to a single daily run
+because Hobby refuses to deploy anything more frequent.
+
+That explanation lives here rather than in the file itself: `vercel.json`
+takes no `comment` key, and a `crons[0]` entry carrying one fails the deploy
+with *"should NOT have additional property"*. Nothing in the repo catches that
+on its own — Vercel’s builder reads the file and `next build` never does, so
+typecheck, lint and CI all pass a file that cannot deploy.
+[`npm run check:vercel`](web/scripts/check-vercel-json.mjs) now validates it,
+and CI runs it on every push. Note the trap it works around: the published
+schema at `openapi.vercel.sh` sets `additionalProperties: false` on 195 of its
+nodes and *not* on the cron item, so validating against the schema as
+published would accept `comment` and the deploy would still fail. The check
+models the stricter deploy validator, and also asserts the cron path resolves
+to a real route handler — a cron pointing at a 404 deploys green and fails
+silently every night.
+
 **Both hitting the same endpoint is safe by construction.** `disburse` reverts
 unless a round is genuinely due, and the route simulates the call before
 signing anything — so a round one trigger has already settled is simply not due
