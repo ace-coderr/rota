@@ -24,7 +24,7 @@ const GITHUB = "https://github.com/ace-coderr/rota";
  * Which is which comes from the route, not from a prop, so a page cannot
  * forget to say and end up with an invisible navbar.
  */
-const DARK_ROUTES = [/^\/$/, /^\/proof(\/|$)/];
+const DARK_ROUTES = [/^\/$/, /^\/proof(\/|$)/, /^\/how-it-works$/];
 
 export function NavBar() {
   const pathname = usePathname();
@@ -106,7 +106,10 @@ export function NavBar() {
             My circles
           </Link>
         )}
-        <Link href="/#how-it-works" className="nav-link">
+        {/* The explainer, not the landing page's three cards. Anyone who
+            reaches for this link has already decided the summary was not
+            enough, so sending them to a section of it is a dead end. */}
+        <Link href="/how-it-works" className="nav-link">
           How it works
         </Link>
         <Link href="/#live-proof" className="nav-link">

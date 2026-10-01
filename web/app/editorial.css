@@ -1118,3 +1118,318 @@
   margin: 1.75rem 0 0;
   opacity: 0.78;
 }
+
+/* ===================================================================
+   /how-it-works — editorial volume, reading-speed body
+   ===================================================================
+
+   The only page on the site somebody reads top to bottom rather than
+   scans, so the prose is set larger and looser than anywhere else: 19px
+   against the app's 18px floor, 1.7 leading, and a measure held near 38rem
+   — about 68 characters, which is where a line stops needing the eye to
+   hunt for the start of the next one.
+
+   Note the selector shape throughout. `.prose p` is (0,1,1), so a bare
+   `.prose-aside` at (0,1,0) would lose to it and silently keep the default
+   measure. Every modifier here is therefore written `.prose p.prose-aside`
+   — see the convention at the top of globals.css, which this is the fifth
+   instance of. */
+
+.prose p,
+.prose li {
+  font-size: 1.1875rem;
+  line-height: 1.7;
+  max-width: 38rem;
+}
+
+.prose p {
+  margin: 0 0 1.25rem;
+}
+
+/* Deck under the hero headline: bigger than the body, and the second one
+   quieter, so the pair reads as one unit rather than two paragraphs. */
+p.prose-lede {
+  font-size: clamp(1.1875rem, 4.2vw, 1.4375rem);
+  line-height: 1.55;
+  max-width: 34rem;
+  margin: 1.75rem 0 0;
+}
+
+/*
+ * (0,2,1), and it has to be. The first draft wrote this as a bare
+ * `.prose-lede-quiet` (0,1,0) while the rule above was grouped with
+ * `.band-dark .prose-lede` (0,2,0) — so on the one band this page uses it
+ * on, the quiet deck rendered at the loud size and the pair read as two
+ * competing opening sentences. Measured, not spotted.
+ */
+p.prose-lede.prose-lede-quiet {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  color: var(--on-dark-soft);
+  margin-top: 1rem;
+}
+
+/* An aside: still body text, just stepped back from the argument. */
+.prose p.prose-aside {
+  font-size: 1.125rem;
+  line-height: 1.65;
+  border-left: 2px solid currentColor;
+  padding-left: 1.125rem;
+  margin: 2rem 0 1.25rem;
+  max-width: 36rem;
+  opacity: 0.86;
+}
+
+/* The one sentence in a section that has to survive skimming. */
+.prose p.prose-strong {
+  font-size: 1.25rem;
+  line-height: 1.55;
+  font-weight: 600;
+  margin: 2rem 0 1.25rem;
+  max-width: 36rem;
+}
+
+.prose a {
+  font-weight: 600;
+}
+
+.prose ul.plainlist {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 2rem;
+  display: grid;
+  gap: 1.125rem;
+}
+
+.prose ul.plainlist li {
+  border-top: 1px solid var(--edge);
+  padding-top: 1.125rem;
+}
+
+.band-dark .prose ul.plainlist li {
+  border-top-color: var(--edge-dark);
+}
+
+/* ------------------------------------------------ the worked example */
+
+/*
+ * Horizontal scroll rather than wrapping. A ledger cell that wraps lands
+ * under the wrong column heading and reads as a different person's number,
+ * which is a worse failure at 375px than a scrollbar is.
+ */
+.ledger-scroll {
+  overflow-x: auto;
+  margin: 0 0 1.75rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ledger {
+  width: 100%;
+  min-width: 20rem;
+  max-width: 40rem;
+  border-collapse: collapse;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 1.125rem;
+}
+
+.ledger th,
+.ledger td {
+  padding: 0.875rem 0.75rem 0.875rem 0;
+  border-bottom: 1px solid var(--edge);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger thead th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+  border-bottom-color: currentColor;
+}
+
+/* The row label and the "who's paid" column are words, not figures. */
+.ledger th[scope="row"],
+.ledger thead th:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.ledger .ledger-who {
+  text-align: left;
+  padding-left: 1.25rem;
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+.ledger tfoot th,
+.ledger tfoot td {
+  border-bottom: none;
+  border-top: 2px solid currentColor;
+  font-weight: 700;
+}
+
+.ledger .up {
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.ledger .down {
+  opacity: 0.72;
+}
+
+/* ------------------------------------------------------ worked cases */
+
+/* A scenario set off from the argument around it. */
+.case {
+  border: 1px solid var(--edge);
+  padding: 1.75rem 1.5rem 0.75rem;
+  margin: 2.25rem 0 1rem;
+  max-width: 40rem;
+}
+
+.band-dark .case {
+  border-color: var(--edge-dark);
+}
+
+.case h3 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  font-size: 1.25rem;
+  margin: 0 0 1rem;
+}
+
+.prose .case p {
+  font-size: 1.125rem;
+  line-height: 1.65;
+  max-width: 34rem;
+}
+
+/* ---------------------------------------------------- the receipt */
+
+/* Three wallets and a zero. Set like a statement, because that is what it
+   is being offered as — the money moved, here is where it went. */
+.receipt {
+  border: 1px solid var(--edge-dark);
+  padding: 1.5rem 1.25rem;
+  margin: 0 0 1.75rem;
+  max-width: 40rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.receipt-rows li,
+.receipt-total {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  margin: 0;
+}
+
+.receipt-who {
+  font-family: var(--font-body), system-ui, sans-serif;
+  font-size: 1.125rem;
+}
+
+.receipt-move {
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.receipt-move.up {
+  color: var(--blue);
+}
+
+/* The brand blue is 2.49:1 on near-black, which fails even the 3:1 allowed
+   for large bold text — and this figure is the one number on the page that
+   has to be read. Lifted to 6.69:1, which clears AA at any size. On cream
+   the brand blue is already 6.85:1 and is left alone. */
+.band-dark .receipt-move.up {
+  color: #7f8cff;
+}
+
+.receipt-note {
+  grid-column: 1 / -1;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  opacity: 0.7;
+}
+
+.receipt-total {
+  border-top: 1px solid var(--edge-dark);
+  margin-top: 1.25rem;
+  padding-top: 1.25rem;
+}
+
+/* --------------------------------------------------- what it cannot do */
+
+.cannot {
+  display: grid;
+  gap: 1px;
+  background: var(--edge-dark);
+  border: 1px solid var(--edge-dark);
+  margin: 2rem 0 0;
+}
+
+@media (min-width: 40rem) {
+  .cannot {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.cannot-item {
+  background: var(--ink);
+  padding: 1.5rem 1.25rem;
+}
+
+.cannot-item h3 {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-size: 1.125rem;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.625rem;
+}
+
+.prose .cannot-item p {
+  font-size: 1.125rem;
+  line-height: 1.6;
+  margin: 0;
+  max-width: none;
+  opacity: 0.88;
+}
+
+@media (max-width: 30rem) {
+  .prose p,
+  .prose li {
+    font-size: 1.125rem;
+  }
+
+  /*
+   * On a phone the ledger drops its last column rather than its type size.
+   *
+   * "Who is paid" repeats what the +20 already says — it is a convenience on a
+   * wide screen and the first thing to go on a narrow one. Shedding it buys
+   * enough room to keep the figures at the same 18px as the prose, which is
+   * the opposite of the usual trade: a worked example nobody can read is not a
+   * worked example.
+   */
+  .ledger .ledger-who {
+    display: none;
+  }
+
+  .ledger th,
+  .ledger td {
+    padding-right: 0.5rem;
+  }
+}

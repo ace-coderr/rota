@@ -704,7 +704,13 @@ export default function CirclePage({ params }: PageProps<"/circle/[id]">) {
       </h1>
       <p className="lede">
         {money(contribution, decimals)} USDC each, {everyInWords(circle?.period)}
-        {memberCount ? `, ${memberCount} people` : ""}.
+        {memberCount ? `, ${memberCount} people` : ""}.{" "}
+        {/* Most people reach this page from an invite link, which means this
+            may be the first thing they ever see of Rota — and the question
+            they arrive with is whether joining hands anyone their money. */}
+        <Link href="/how-it-works" className="lede-link">
+          New to this?
+        </Link>
       </p>
 
       <WalletBar />

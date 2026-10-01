@@ -407,7 +407,13 @@ export default function CreatePage() {
       <h1>Start a circle</h1>
       <p className="lede">
         Everyone puts in the same amount each round, and takes it in turns to
-        receive everyone else&rsquo;s share.
+        receive everyone else&rsquo;s share.{" "}
+        {/* Before the first field rather than after the last. Someone unsure
+            what they are setting up is unsure now, and a link at the foot of
+            a form is found only by people who already finished it. */}
+        <Link href="/how-it-works" className="lede-link">
+          How it works
+        </Link>
       </p>
 
       {/*

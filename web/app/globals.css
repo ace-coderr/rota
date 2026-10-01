@@ -39,8 +39,13 @@
  *   4. Every step panel on /create opened with 44px of empty space above its
  *      heading, because `.sheet h2` (0,1,1) kept its 2.75rem top margin over
  *      `.step-title` (0,1,0). Fixed as `h2.step-title`.
+ *   5. The quiet second deck on /how-it-works rendered at the loud deck's
+ *      size, because `.prose-lede-quiet` (0,1,0) lost to a grouped
+ *      `.band-dark .prose-lede` (0,2,0) — on the only band it is used on, so
+ *      it was wrong everywhere it appeared. Fixed as
+ *      `p.prose-lede.prose-lede-quiet`.
  *
- * All three were invisible in the diff and only showed up in a measurement.
+ * All five were invisible in the diff and only showed up in a measurement.
  * When overriding, match the selector shape rather than trusting position.
  */
 
@@ -1910,4 +1915,16 @@ main.sheet-list {
   .changing {
     animation: none;
   }
+}
+
+/*
+ * A link riding along at the end of a lede.
+ *
+ * Qualified `.lede a.lede-link` because `.lede` sets a 1.25rem size that a
+ * bare class would inherit at full weight — the link is a secondary offer
+ * beside the sentence it follows, not a second sentence.
+ */
+.lede a.lede-link {
+  font-size: 1rem;
+  white-space: nowrap;
 }
