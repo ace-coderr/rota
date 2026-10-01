@@ -398,7 +398,40 @@ diagnosable. The decision is a pure function and is tested directly
 (`npm run check:cron --prefix web`), because in production the evidence of a
 correct decision is a transaction that does not exist.
 
+### GitHub's scheduler is best-effort, and visibly so
+
+The settlement mechanism itself is proven on mainnet: the relayer settled two
+of circle 2's three rounds, and the second of them landed **six seconds** after
+the Actions run that triggered it —
+[run at 08:56:16Z](https://github.com/ace-coderr/rota/actions/workflows/disburse.yml),
+[round at 08:56:22Z](https://explorer.arc.io/tx/0x33f513a6c125ed2f127ab3206d6427d206327081c49a62df888baf92cbfd7aa0).
+
+The *schedule* is the weak part. `schedule:` is best-effort and GitHub drops
+runs under load, which is documented but easy to read as a formality. It is
+not. In the first ~26 hours this workflow existed, an hourly cron should have
+fired about 26 times. It fired **four**, with gaps of 4.6, 3.9 and 7.6 hours —
+and only two of those four succeeded, so an hourly circle was actually visited
+twice in a day.
+
+Circle 2's last round is what that looks like in practice: no scheduled run
+fired between 08:56 and 12:31, so a member settled it themselves
+([12:31Z, sent by a member's own wallet](https://explorer.arc.io/tx/0x4d162d4156c26d68d761adf5d3417837239292a0d6c90a7d88d7fd3609ca389c)).
+The circle completed on time because somebody pressed the button, not because
+the scheduler worked.
+
+**For a production deployment, drive `/api/cron/disburse` from a dedicated
+scheduler** — [cron-job.org](https://cron-job.org) or similar, or a paid Vercel
+plan, which allows sub-daily cron. Nothing about the endpoint changes; it is
+the same permissionless call, and whatever calls it needs only `CRON_SECRET`.
+GitHub Actions is fine as a free backstop and is kept as one. It is not a
+schedule anybody should depend on.
+
 ### The manual button never goes away
+
+That is not a workaround for the above — it is why the button exists. **No
+scheduler is guaranteed**, including a paid one, so a circle that can only be
+settled by a scheduler is a circle that can stall for reasons none of its
+members can see or fix.
 
 A circle must work when the scheduler does not. Every member can still settle a
 round themselves from the circle page, at any time, and that path is unchanged —
@@ -511,8 +544,11 @@ due rounds → Run workflow**, or `gh workflow run disburse.yml`.
 Every run prints a summary — circles scanned, what was due, what settled, what
 was held and why — into both the job log and the run page, so a held round is
 visible from the Actions list without opening Vercel. A scheduled workflow is
-disabled after 60 days of repo inactivity, and GitHub's scheduler is best-effort
-under load, which is the other reason the daily Vercel cron stays.
+also disabled after 60 days of repo inactivity, which is one reason the daily
+Vercel cron stays; the measured skip rate, under
+[GitHub's scheduler is best-effort](#githubs-scheduler-is-best-effort-and-visibly-so),
+is the other, and the reason neither of these should be the only trigger in
+production.
 
 `vercel.json` takes no `comment` key: a `crons[0]` entry carrying one fails the
 deploy with *"should NOT have additional property"*, and nothing in the repo
