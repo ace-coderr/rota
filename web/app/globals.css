@@ -1928,3 +1928,218 @@ main.sheet-list {
   font-size: 1rem;
   white-space: nowrap;
 }
+
+/* ----------------------------------------------- /circles, two sections */
+
+/*
+ * Active and Finished.
+ *
+ * `.sheet .clist-head` is (0,2,0) rather than `h2.clist-head` (0,1,1),
+ * because `.sheet h2` is also (0,1,1) and a tie is decided by source order —
+ * which is the thing the convention at the top of this file exists to stop
+ * anyone relying on. (0,2,0) wins outright, and covers the <summary> that
+ * carries the same class without needing a second rule.
+ */
+.sheet .clist-head {
+  font-family: var(--font-display), system-ui, sans-serif;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: 0.01em;
+  margin: 2.5rem 0 1rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.clist-count {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--on-light-soft);
+}
+
+/* The two empty states. They say what the section is for, so somebody with no
+   circles at all sees the shape of the page rather than two blank areas. */
+.clist-empty {
+  border: 1px dashed var(--edge);
+  padding: 1.5rem 1.25rem;
+}
+
+.clist-empty-title {
+  font-weight: 600;
+  margin: 0 0 0.375rem;
+}
+
+.clist-empty .small {
+  color: var(--on-light-soft);
+  margin-bottom: 1.25rem;
+}
+
+/* Nothing finished is the ordinary state of a new account, not a problem. */
+.clist-empty-quiet {
+  border-style: solid;
+  border-color: var(--edge);
+  background: transparent;
+  opacity: 0.85;
+}
+
+.clist-empty-quiet .small {
+  margin-bottom: 0;
+}
+
+/* -------------------------------------------------- the finished section */
+
+.clist-done {
+  margin-top: 1rem;
+}
+
+.sheet .clist-summary {
+  cursor: pointer;
+  list-style: none;
+  /* The row is the target, so it gets the whole width and a comfortable
+     height rather than only the words being tappable. */
+  padding: 0.5rem 0;
+  transition: color var(--tap) ease;
+}
+
+/* Safari draws its own triangle through ::-webkit-details-marker, which
+   list-style: none does not reach. */
+.sheet .clist-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sheet .clist-summary::after {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translate(-0.125rem, -0.125rem);
+  transition: transform var(--tap) ease;
+  opacity: 0.65;
+}
+
+.clist-done[open] .clist-summary::after {
+  transform: rotate(-135deg) translate(-0.125rem, -0.125rem);
+}
+
+.sheet .clist-summary:hover {
+  color: var(--blue);
+}
+
+.sheet .clist-summary:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.crows-done {
+  gap: 0.5rem;
+}
+
+/*
+ * Quieter than an active row, and smaller: no background, a lighter edge, and
+ * one line of text instead of four. It stays a link, because the per-circle
+ * history is still worth reaching — it just stops competing with the rows
+ * that need a decision.
+ */
+.crow-done {
+  background: transparent;
+  border-color: var(--edge);
+  padding: 0.875rem 1rem;
+  color: var(--on-light-soft);
+}
+
+.crow-done:hover {
+  border-color: var(--on-light-soft);
+  box-shadow: none;
+}
+
+.crow-done-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+  margin-bottom: 0.25rem;
+}
+
+/* Part of the sentence now, so it is set like one — same size, a step back in
+   weight only. As a second column in uppercase mono it read as a heading and
+   took more width on a phone than the record it was annotating. */
+.crow-done-when {
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* The same size as an active row's facts and footer, so "quieter" is carried
+   by colour and weight rather than by shrinking the one sentence in the row
+   that anybody actually reads. */
+.crow-done-line {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+}
+
+.crow-done-line strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet .clist-summary,
+  .sheet .clist-summary::after {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------ skeletons */
+
+/*
+ * These were being used on /circles and /circle/[id] and were never defined.
+ *
+ * An undefined `.skel` is an empty inline <span> with no size, so the
+ * skeleton rendered as nothing at all — zero height, no placeholder, and the
+ * layout shift it exists to prevent happening exactly as if it were not
+ * there. It failed silently and looked deliberate, because an empty loading
+ * state is indistinguishable from a fast one until the reads are slow.
+ *
+ * The reduced-motion rule above already referred to `.skel`, which is the
+ * clue: the breathing was switched off for a shape that was never drawn.
+ */
+.skel {
+  display: block;
+  background: var(--cream-dim);
+  border-radius: 2px;
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+.skel-text {
+  height: 1rem;
+  max-width: 100%;
+}
+
+.skel-small {
+  height: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* The "joining someone else's" card follows the Finished empty state, and
+   both are quiet boxes with the same hairline — flush against each other they
+   read as one box with a rule through it. (0,2,0) against `.card`'s (0,1,0),
+   so it wins on specificity rather than on being further down the file. */
+.sheet-list .card {
+  margin-top: 2rem;
+}

@@ -135,3 +135,23 @@ export function nameList(names: string[], max = 3): string {
   const rest = names.length - max;
   return `${shown} and ${rest} ${rest === 1 ? "other" : "others"}`;
 }
+
+/**
+ * A day, for something that already happened: "1 October", or "1 October 2026"
+ * once the year stops being obvious.
+ *
+ * Shorter than dateInWords on purpose — a finished circle's line is a record,
+ * not an appointment, so the clock time is noise. The year appears only when
+ * it differs from the current one, which is the difference between a tidy line
+ * this year and an ambiguous one next year.
+ */
+export function dayInWords(seconds: bigint | undefined): string {
+  if (seconds === undefined || seconds === 0n) return "—";
+  const date = new Date(Number(seconds) * 1000);
+  const thisYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    ...(thisYear ? {} : { year: "numeric" }),
+  });
+}

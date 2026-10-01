@@ -70,6 +70,41 @@ export const STANDING_RANK: Record<CircleStanding, number> = {
   complete: 3,
 };
 
+/**
+ * What a finished circle actually did for this member, from state alone.
+ *
+ * In a complete circle of n members, every round has n−1 payers — everyone
+ * except whoever is being paid — and each member is the recipient exactly
+ * once. So each member pays in n−1 rounds and is paid once, out of n−1
+ * contributions. The two are the same figure, necessarily, and that is the
+ * whole design rather than a coincidence worth hiding: a circle is a way of
+ * changing WHEN you have money, not how much.
+ *
+ * Needs no history. The three inputs are all in `getCircle`.
+ */
+export function completedTotals(contribution: bigint, memberCount: number) {
+  const payers = BigInt(Math.max(0, memberCount - 1));
+  return { putIn: contribution * payers, received: contribution * payers };
+}
+
+/**
+ * When the last round came due.
+ *
+ * NOT when it settled, and deliberately not described as such anywhere a
+ * person reads. `disburse` advances `nextDueAt` by one period from the
+ * previous due date, so after the final round this value is one period past
+ * the last due date — subtracting a period gives the date that round was due,
+ * which is the earliest it can have settled, not the moment it did. On a live
+ * mainnet circle the gap was five hours.
+ *
+ * The real settlement time is in the logs, and reading those is the thing
+ * this page exists not to do. So the page says "due", which is true of a
+ * value derived this way.
+ */
+export function lastRoundDueAt(nextDueAt: bigint, period: bigint) {
+  return nextDueAt > period ? nextDueAt - period : 0n;
+}
+
 export type MyCircle = {
   id: bigint;
   contribution: bigint;
@@ -88,6 +123,12 @@ export type MyCircle = {
   paysNext: bigint;
   /** Arrives instead, when it is their turn. */
   receives: bigint;
+  /** What they paid in across the whole circle. Only meaningful once complete. */
+  putIn: bigint;
+  /** What came back. Equal to putIn, by construction — see completedTotals. */
+  received: bigint;
+  /** When the final round came due. Zero unless complete. */
+  endedAt: bigint;
 };
 
 type RawCircle = readonly [bigint, bigint, bigint, number, boolean, bigint];
@@ -228,6 +269,9 @@ export function useMyCircles(you: Address | undefined, chainId: number | undefin
             ? 0n
             : balanceForRound(contribution, entry.myIndex, Number(cycleIndex)),
         receives: isMyTurn ? contribution * BigInt(Math.max(0, count - 1)) : 0n,
+        ...completedTotals(contribution, count),
+        endedAt:
+          standing === "complete" ? lastRoundDueAt(nextDueAt, period) : 0n,
       } satisfies MyCircle;
     });
 
@@ -239,8 +283,30 @@ export function useMyCircles(you: Address | undefined, chainId: number | undefin
     );
   }, [mine, joined.data]);
 
+  /*
+   * Two lists, not one sorted list with a boundary somewhere in it.
+   *
+   * Everything above `complete` still wants something from this person; a
+   * complete circle wants nothing ever again. Sorting them together put the
+   * finished ones at the bottom, which is the right order and still the wrong
+   * shape — the page is read to decide what to do next, and a row that can
+   * never be acted on is competing for that attention rather than supporting
+   * it. The split is derived from the same sort, so the ordering rules and
+   * their test keep covering the active half.
+   */
+  const active = useMemo(
+    () => circles.filter((c) => c.standing !== "complete"),
+    [circles],
+  );
+  const finished = useMemo(
+    () => circles.filter((c) => c.standing === "complete"),
+    [circles],
+  );
+
   return {
     circles,
+    active,
+    finished,
     total,
     scanned,
     /** True while more circles exist than have been looked at. */

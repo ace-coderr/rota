@@ -30,6 +30,14 @@ const classify = src.slice(
 );
 const rank = src.slice(
   src.indexOf("export const STANDING_RANK"),
+  src.indexOf("export function completedTotals"),
+);
+// The figures on a finished row. Bounded explicitly rather than left to run on
+// from the slice above, which it silently did at first — it still passed,
+// because the extra code happened to be valid, which is the kind of accident
+// that only stops being one when somebody adds a line between them.
+const totals = src.slice(
+  src.indexOf("export function completedTotals"),
   src.indexOf("export type MyCircle"),
 );
 
@@ -38,11 +46,15 @@ const file = join(dir, "sort.ts");
 writeFileSync(
   file,
   `${classify.replace(/: CircleStanding/g, "").replace(/\{\s*started,\s*cycleIndex,\s*memberCount,\s*joined,\s*\}: \{[^}]*\}/s, "{ started, cycleIndex, memberCount, joined }")}\n` +
-    `${rank.replace(/: Record<CircleStanding, number>/, "")}\n`,
+    `${rank.replace(/: Record<CircleStanding, number>/, "")}\n` +
+    `${totals}\n`,
 );
-const { classify: classifyFn, STANDING_RANK } = await import(
-  pathToFileURL(file).href
-);
+const {
+  classify: classifyFn,
+  STANDING_RANK,
+  completedTotals,
+  lastRoundDueAt,
+} = await import(pathToFileURL(file).href);
 
 const cases = [
   {
@@ -101,6 +113,60 @@ console.log(`complete is last:      ${sorted.at(-1) === "complete" ? "yes" : "NO
 console.log(
   `running above waiting: ${STANDING_RANK.running < STANDING_RANK["waiting-to-start"] ? "yes" : "NO"}`,
 );
+
+/*
+ * The one line a finished row shows.
+ *
+ * It is the only number on that row and nobody can check it against anything
+ * — the circle is over and the rows that made it up are not on the page. If
+ * it were wrong it would look exactly as authoritative as if it were right.
+ */
+const totalCases = [
+  // 3 people at 0.02: each pays in the two rounds they are not the recipient.
+  { contribution: 20_000n, members: 3, want: 40_000n },
+  { contribution: 50_000n, members: 2, want: 50_000n },
+  // Circle 2 on mainnet, which is the example in the README.
+  { contribution: 50_000n, members: 3, want: 100_000n },
+  { contribution: 1_000_000n, members: 20, want: 19_000_000n },
+  // Degenerate, and must not go negative or throw.
+  { contribution: 50_000n, members: 1, want: 0n },
+  { contribution: 50_000n, members: 0, want: 0n },
+];
+
+const totalRows = totalCases.map((c) => {
+  const { putIn, received } = completedTotals(c.contribution, c.members);
+  // Put in and received have to agree: a finished circle nets to zero, and a
+  // row claiming otherwise would be reporting a bug in the contract that is
+  // not there.
+  const ok = putIn === c.want && received === c.want;
+  if (!ok) bad++;
+  return {
+    case: `${c.members} × ${c.contribution}`,
+    want: c.want.toString(),
+    putIn: putIn.toString(),
+    received: received.toString(),
+    ok,
+  };
+});
+console.log("\nfinished-row totals");
+console.table(totalRows);
+
+// The date is the LAST ROUND'S DUE TIME, one period back from where the
+// schedule ended up — not when it settled, which only the logs know.
+const due = [
+  { nextDueAt: 1_790_196_904n, period: 60n, want: 1_790_196_844n },
+  // Never started, or a period larger than the whole timestamp: no date.
+  { nextDueAt: 0n, period: 3600n, want: 0n },
+  { nextDueAt: 100n, period: 3600n, want: 0n },
+];
+for (const c of due) {
+  const got = lastRoundDueAt(c.nextDueAt, c.period);
+  if (got !== c.want) {
+    bad++;
+    console.log(`lastRoundDueAt(${c.nextDueAt}, ${c.period}) = ${got}, want ${c.want}`);
+  }
+}
+console.log(`lastRoundDueAt: ${due.length} cases checked`);
 
 console.log(bad === 0 ? "\nPASS" : `\n${bad} WRONG`);
 process.exit(bad === 0 ? 0 : 1);
