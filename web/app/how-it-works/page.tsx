@@ -49,6 +49,7 @@ const ANYONE_TX =
   "0xbfd16864b5916c66d2aa6e9e3aa0bf1036f6a9402c30f8b104493ef4712d3f89";
 
 const SECURITY = "https://github.com/ace-coderr/rota#security";
+const FUNDING = "https://github.com/ace-coderr/rota#getting-usdc-on-arc";
 
 export default function HowItWorks() {
   return (
@@ -588,6 +589,24 @@ export default function HowItWorks() {
               It&rsquo;s also quick. A whole round — everyone&rsquo;s share
               moving at once — finishes in under a second, so a circle meeting
               in a room settles before the conversation moves on.
+            </p>
+          </Reveal>
+
+          {/*
+            The question this section leaves a reader with, answered where they
+            ask it. Quiet on purpose: it is the one thing on this page Rota has
+            no part in, and overselling a link to somebody else's service would
+            read as a recommendation Rota is in no position to make.
+          */}
+          <Reveal>
+            <p className="prose-aside">
+              Getting USDC into your wallet in the first place is between you and
+              whichever service you use — Rota never handles pounds, naira or
+              dollars, in either direction.{" "}
+              <a href={FUNDING} target="_blank" rel="noreferrer">
+                What we know about the current options
+              </a>
+              , including where it doesn&rsquo;t work yet.
             </p>
           </Reveal>
         </div>

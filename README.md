@@ -439,6 +439,72 @@ the relayer is a convenience layered on top of it, never a dependency.
 `/circle` shows who set each round going: the scheduler, a member by name, or
 "someone outside the circle", read from the transaction's sender.
 
+## Getting USDC on Arc
+
+**Rota does not handle money in any currency.** It never receives, holds,
+converts or forwards pounds, naira or dollars, and there is no payment
+integration in this repo to audit — there is no code here that could take one.
+
+Members arrive with USDC already in their own wallet, the same way they arrive
+with the wallet. Getting it there is between them and whatever service they
+use: an exchange that supports Arc, a bridge from a chain they already hold
+USDC on, or a card-to-crypto service that has added Arc.
+
+Arc's own documentation is the current reference:
+
+- [On/off-ramp integration](https://docs.arc.io/integrate/on-off-ramps) —
+  written for ramp operators rather than for people, so it is a list of what is
+  required to support Arc, not a directory of who does. It is the page to watch.
+- [Bridging USDC](https://docs.arc.io/app-kit/bridge) — moving USDC to Arc from
+  a chain you already hold it on.
+- [faucet.circle.com](https://faucet.circle.com) — testnet tokens, for trying
+  any of this without real money.
+
+**There is no withdrawal flow, and there is nothing to withdraw.** A payout
+arrives directly in the recipient's own wallet in the same transaction that
+collects it — it is never held by Rota and never sits anywhere waiting to be
+claimed. Turning USDC back into local currency is the same errand as getting it
+in the first place: the member's own, with a service of their own choosing.
+A "Withdraw" button here would imply a balance that does not exist.
+
+## What's next
+
+### Local-currency funding is a real gap
+
+This is built for people who save in rotating circles, and most of them are not
+paid in dollars. Here is where that actually stands, checked against Transak's
+public coverage data in October 2026:
+
+| | |
+| --- | --- |
+| Buying USDC on Arc | **Live.** Transak lists `USDC` on network `arc`, `isAllowed: true`, pointed at the same `0x3600…0000` predeploy Rota uses |
+| Fiat currencies supported | **26** — AUD, BHD, BMD, BRL, CAD, CHF, CZK, DKK, EUR, GBP, GEL, HKD, HUF, ILS, ISK, KWD, MXN, MYR, NOK, NZD, PHP, PLN, RON, RSD, SEK, USD |
+| **NGN** | **Not among them** |
+| Selling USDC from Arc | **Not offered yet** — `isPayInAllowed: false` on the Arc entry, against 11 other networks where USDC can be sold |
+
+So somebody in Lagos can run a circle on Arc, and cannot straightforwardly fund
+it in naira or cash out of it at all. That is the honest state of this.
+
+**It is not something Rota can fix.** No amount of work in this repo closes it,
+because the missing piece is a licensed service willing to exchange naira for
+USDC on Arc — and the moment ramp coverage reaches naira, it closes on its own,
+with no change here. Rota is deliberately not in that path, which is the same
+decision that makes everything else in this README true.
+
+A link-out to a third-party widget was considered and dropped. Transak's current
+integration requires a backend-minted session — query parameters in the widget
+URL are deprecated — so a "pre-filled link and nothing more" is no longer
+possible, and the alternative meant Rota holding a partner key and a
+partner relationship for a button that would not work for the people it was for.
+
+### Still open
+
+- **No professional audit.** The largest gap. See [Security](#security).
+- **Explorer verification on mainnet**, which needs a human at a web form
+  because the API sits behind a bot challenge.
+- **Scheduling**, which should move off GitHub Actions for production. See
+  [GitHub's scheduler is best-effort](#githubs-scheduler-is-best-effort-and-visibly-so).
+
 ## Running it locally
 
 ```bash
